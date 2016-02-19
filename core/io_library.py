@@ -249,6 +249,32 @@ def make_data_tables(species_list,fname_out_bases, base_dir):
             print fname + ' saved'
     
     return 
-        
-        
-  
+    
+def read_SGD_features():
+    
+    #Read in orf/name file and make it a dictionary
+    SC_features_fname = os.path.normpath(data_dir + "\ortholog_files\\SGD_features.tab")
+    SC_features = pd.read_csv(SC_features_fname, sep = '\t', header=None)
+    SC_orfs = SC_features.groupby(1).get_group('ORF')
+    
+    #Makes a dictionary to look up orfs by gene names.  This won't include all orfs - those without names had NaN in column 4 so 
+    #are presumably left out. 
+    SC_orfs_lookup = dict(zip(SC_orfs[4], SC_orfs[3]))
+    SC_genename_lookup = dict(zip(SC_orfs[3], SC_orfs[4]))
+       
+    return SC_orfs_lookup, SC_genename_lookup
+
+def read_orth_lookup_table(species1, species2):
+    #For a given species read in the ortholog file, make a dictionary
+    orth_file_abbrev = {'Kluyveromyces lactis': 'Klac', 'Saccharomyces cerevisiae': 'Scer', 'Candida glabrata':'Cgla', 'Saccharomyces castellii' : 'Scas', 'Saccharomyces bayanus' : 'Sbay'}
+    orth_fname = orth_file_abbrev[species1] + "-" + orth_file_abbrev[species2] + "-orthologs.txt"
+    orth_fname = os.path.normpath(data_dir + "\ortholog_files\\" + orth_fname)
+    
+    #There are some orfs that have multiple orthologs - in that case both will be used
+    with open(orth_fname) as f:
+        orth_lookup = {}
+        for line in f:
+            linesp = line.split()
+            orth_lookup[linesp[0]]= linesp[1:]
+
+    return orth_lookup  
