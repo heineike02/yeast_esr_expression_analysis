@@ -1,3 +1,4 @@
+from core import io_library 
 import pandas as pd
 import numpy as np
 import seaborn as sns
@@ -55,6 +56,100 @@ def promoter_choice_plot(mean_gene_expression, condition_arrays, pct_expression,
     fig, ax = plt.subplots()
     sns.heatmap(plotted_genes, cmap = cmap, ax = ax)
 
+    return fig, ax, condition_arrays
+    
+def promoter_ortholog_plot(SC_genenames, species, native_orfs_empirical, condition_arrays):
+
+    #Makes a dictionary to look up orfs by gene names.  This won't include all orfs - those without names had NaN in column 4 so 
+    #are presumably left out. 
+    SC_orfs_lookup, SC_genename_lookup = io_library.read_SGD_features()
+    
+    #For a given species read in the ortholog file, make a dictionary
+    orth_lookup = io_library.read_orth_lookup_table('Saccharomyces cerevisiae', species)
+    
+    #For the given list of SC genes find the orthologs
+    #This handles a situation where one SC orf has two orthologs. 
+    native_orf_orthologs = []
+    for genename in SC_genenames: 
+        orf = SC_orfs_lookup[genename]
+        orf_orthologs = orth_lookup[orf]
+        for orf_ortholog in orf_orthologs: 
+            native_orf_orthologs.append([orf_ortholog, genename])
+    
+    orth_lookup_rev = io_library.read_orth_lookup_table(species, 'Saccharomyces cerevisiae')
+    
+    for native_orf in native_orfs_empirical:
+        orf_orthologs_rev = orth_lookup_rev[native_orf]
+        for orf_ortholog_rev in orf_orthologs_rev:
+            try: 
+                SC_genename = SC_genename_lookup[orf_ortholog_rev]
+            except KeyError as e:
+                print 'No S.Cerevisiae ortholog for : ' + native_orf
+                SC_genename = orf_ortholog_rev
+            native_orf_orthologs.append([native_orf, SC_genename])
+
+    native_orfs = [orth[0] for orth in native_orf_orthologs]
+    SC_genenames = [orth[1] for orth in native_orf_orthologs]
+    #Tracer()()
+    native_orfs, SC_genenames = remove_duplicate_orfs(native_orfs, SC_genenames)
+    
+    
+    display_order = [jj for jj in range(len(native_orfs))]
+    
+    native_orf_ortholog_dict = {}
+    native_orf_ortholog_dict['display_order'] = display_order
+    native_orf_ortholog_dict['SC_genename'] = SC_genenames
+    print 'reloaded 1011'
+    #Tracer()()
+    native_orf_ortholog_df = pd.DataFrame(native_orf_ortholog_dict, index = native_orfs)
+    
+    #Make a dataframe from the list by selecting correct data from condition arrays
+    #sorting is required to extract data with slice 
+    condition_arrays.sort_index(inplace = True)
+    plotted_genes = condition_arrays.loc[(slice(None),[ortholog[0] for ortholog in native_orf_orthologs]),: ]  
+    #Get rid of ID index
+    #Tracer()()
+    plotted_genes.index = plotted_genes.index.droplevel(0)
+    
+    #Add new columns for each ortholog
+    print species   
+    
+    plotted_genes = pd.concat([native_orf_ortholog_df, plotted_genes], axis = 1)
+    
+    #Make new multiindex with the SC_genename first
+    plotted_genes.set_index(['SC_genename',plotted_genes.index], inplace = True)
+    plotted_genes.index.names = ['SC_genename', 'native_orf']
+    
+    #Sort by N_display
+    plotted_genes.sort_values('display_order', inplace = True)
+    
+    #remove expression and stability flags as well as order columns for plotting
+    plotted_genes = plotted_genes.iloc[:,1:-2]
+    
+    #Visualize with heatmap
+    cmap = mpl.cm.RdBu_r
+    cmap.set_bad('k',1.0)
+    fig, ax = plt.subplots()
+    sns.heatmap(plotted_genes, cmap = cmap, ax = ax)
+            
     return fig, ax
     
+def remove_duplicate_orfs(native_orfs, SC_genenames):
+    
+    remove_ind = []
+    for orf in list(set(native_orfs)):
+        count = 0
+        for ii, jj in enumerate(native_orfs):
+            if jj == orf:
+                count = count + 1
+                if count >1:
+                    remove_ind.append(ii)
+                    print 'duplicate orf mapping for {}, removed {} '.format(orf,SC_genenames[ii])
+                
+    remove_ind = sorted(remove_ind, reverse=True)
+    for ind in remove_ind:
+        SC_genenames.pop(ind)
+        native_orfs.pop(ind)
+    
+    return native_orfs, SC_genenames
     

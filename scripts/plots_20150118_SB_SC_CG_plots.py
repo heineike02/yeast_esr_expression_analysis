@@ -3,7 +3,7 @@ base_dir = 'C:\Users\Ben\Documents\GitHub\expression_broad_data'
 os.chdir(base_dir) 
 from core import expression_plots 
 from core import io_library 
-#from IPython.core.debugger import Tracer
+from IPython.core.debugger import Tracer
 import numpy as np
 import pandas as pd
 import re
@@ -13,21 +13,29 @@ import seaborn as sns
 
 def main():
     #Species List: S. Cerevisiae, K. Lactis, S. Bayanus, C. Glabrata, N. Castelli
+    species_list = ['Kluyveromyces lactis', 'Candida glabrata', 'Saccharomyces castellii' , 'Saccharomyces bayanus']
     #species_list = ['Saccharomyces cerevisiae', 'Kluyveromyces lactis', 'Candida glabrata', 'Saccharomyces castellii' , 'Saccharomyces bayanus']
-    species_list = ['Saccharomyces bayanus']
     #filename of combined raw and perturbation expression data
     #fname_out_bases = ['SCer', 'KLac', 'CGla', 'SCas','SBay']
-    fname_out_bases = ['SBay']
+    fname_out_bases = ['KLac', 'CGla', 'SCas','SBay']
     
+    #Parameters for promoter_choice_plot
     pct_expression = (0.90,1)
     pct_stability = (0.80,1)
-    
     sort_order = ['mean_gene_expression',0]
     #sort_order is either ['stability_score',1] which means sort stability scores in ascending order or
     #['mean_gene_expression',0] which means sort mean_expression scores in descending order
     N_plotted = 20
+    promoter_choice_fig_fname_suffix = '_highexp_stable_by_exp.png'
     
-    fig_fname_suffix = '_highexp_stable_by_exp.png'
+    #Parameters for promoter_ortholog_plot
+    SC_genenames = [ 'ADH1', 'CYC1', 'RPS25A', 'ACT1', 'NOP7', 'TDH3','TEF1','TEF2','HHF2','PGK1','CCW12']
+    native_orfs_empirical_dict = {'Saccharomyces cerevisiae': [],
+                                  'Kluyveromyces lactis': [],
+                                  'Candida glabrata' :  ['CAGL0L02475g','CAGL0I01562g', 'CAGL0M13629g', 'CAGL0C03608g'],
+                                  'Saccharomyces castellii': [],
+                                  'Saccharomyces bayanus': []}
+    promoter_ortholog_fig_fname_suffix = '_constitutive_promoter_orthologs.png'
     
     # Optional: Parse original data file and make CSV for raw expression and perturbations
     # Only need to do this the first time you use the data set.  Subsequent runs can read data directly from the CSV. 
@@ -37,7 +45,7 @@ def main():
         io_library.make_data_tables(species_list,fname_out_bases, base_dir)
  
     for jj in range(len(species_list)):
-        
+        species = species_list[jj]
         #Load raw expression data
         fname = os.path.normpath(base_dir + "\microarray_data\\raw_exp\\"  + fname_out_bases[jj] + '_raw_exp.csv')
         raw_exp = pd.read_csv(fname, index_col = 'orf_name')
@@ -57,7 +65,7 @@ def main():
         growth_replicate_groups = growth_exp.groupby(axis = 1, level = 'conditions')
         growth_exp_avg = growth_replicate_groups.aggregate(np.mean)
         
-        if species_list[jj] != 'Saccharomyces bayanus':
+        if species != 'Saccharomyces bayanus':
             #There is no stress dataset for S. bayanus
             fname = os.path.normpath(base_dir + "\microarray_data\\GSE38478_Stress\\"  + fname_out_bases[jj] + '_stress.csv' )
             stress_exp = pd.read_csv(fname,header = [0,1,2], index_col = [0,1])
@@ -76,24 +84,37 @@ def main():
             condition_arrays = growth_exp_avg
         
         #Run Promoter decision plots
-
+        
+        #First plot extracts top 
   
         Nconds = len(condition_arrays.columns)
         weight_vector = [1 for kk in range(Nconds)]
         #Should I make this a unit vector?
     
-        fig_fname =  os.path.normpath("C:\Users\Ben\Google Drive\UCSF\ElSamad_Lab\PKA\Bioinformatics\Microarrays\\20160215_promoter_Pick_CG_SB_NCAS\\"  + fname_out_bases[jj] + fig_fname_suffix )
+        promoter_choice_fig_fname =  os.path.normpath("C:\Users\Ben\Google Drive\UCSF\ElSamad_Lab\PKA\Bioinformatics\Microarrays\\20160215_promoter_Pick_CG_SB_NCAS\\"  + fname_out_bases[jj] + promoter_choice_fig_fname_suffix )
         
-        fig, ax = expression_plots.promoter_choice_plot(mean_gene_expression, condition_arrays, pct_expression, pct_stability, weight_vector, sort_order = sort_order, N_plotted = N_plotted)
+        fig1, ax1, condition_arrays = expression_plots.promoter_choice_plot(mean_gene_expression, condition_arrays, pct_expression, pct_stability, weight_vector, sort_order = sort_order, N_plotted = N_plotted)
         
         plt.yticks(rotation = 0)
         plt.xticks(rotation = 90) 
         plt.show()
         
-        fig.savefig(fig_fname,format = 'png')
+        fig1.savefig(promoter_choice_fig_fname,format = 'png')
         
-        print fig_fname + ' plotted and saved'
-   
+        print promoter_choice_fig_fname + ' plotted and saved'
+        
+        #Plot promoter_ortholog_plot
+        native_orfs_empirical = native_orfs_empirical_dict[species]
+        #Tracer()()
+        fig2, ax2 = expression_plots.promoter_ortholog_plot(SC_genenames, species, native_orfs_empirical, condition_arrays)
+        
+        plt.yticks(rotation = 0)
+        plt.xticks(rotation = 90) 
+        plt.show()
+        
+        promoter_ortholog_fig_fname =  os.path.normpath("C:\Users\Ben\Google Drive\UCSF\ElSamad_Lab\PKA\Bioinformatics\Microarrays\\20160215_promoter_Pick_CG_SB_NCAS\\"  + fname_out_bases[jj] + promoter_ortholog_fig_fname_suffix )
+        fig2.savefig(promoter_ortholog_fig_fname,format = 'png')
+        
         
 
 if __name__=="__main__":
