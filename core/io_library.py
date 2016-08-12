@@ -5,7 +5,9 @@ import numpy as np
 import re
 
 #data_dir is a global variable where all data files are stored. 
-data_dir = os.path.normpath("C:\Users\Ben\Documents\GitHub\expression_broad_data\microarray_data")		
+# Gabe 7/12/16
+# data_dir = os.path.normpath("C:\Users\Ben\Documents\GitHub\expression_broad_data\microarray_data")		
+data_dir = os.path.normpath(os.path.dirname(os.getcwd()) + '/scripts/expression_broad_data_datafiles/microarray_data/')
 
 def tryfloatconvert(value, default):
     try:
@@ -231,20 +233,26 @@ def make_data_tables(species_list,fname_out_bases, base_dir):
         raw_exp, orf_lookup = parse_raw_exp(species_list[jj])
         
         #save raw expression data to a csv file
-        fname = os.path.normpath(base_dir + "\microarray_data\\raw_exp\\"  + fname_out_bases[jj] + '_raw_exp.csv')
+        # Gabe 7/12/16
+        # fname = os.path.normpath(base_dir + "\microarray_data\\raw_exp\\"  + fname_out_bases[jj] + '_raw_exp.csv')
+        fname = os.path.normpath(base_dir + "/microarray_data/raw_exp/"  + fname_out_bases[jj] + '_raw_exp.csv')
         raw_exp.to_csv(fname)
         print fname + ' saved'
         
         #Generate data for microarrays
         growth_exp = parse_micro_data(species_list[jj],'Growth',orf_lookup)
-        fname = os.path.normpath(base_dir + "\microarray_data\\GSE36253_Growth\\"  + fname_out_bases[jj] + '_growth.csv' )
+        # Gabe 7/12/16
+        # fname = os.path.normpath(base_dir + "\microarray_data\\GSE36253_Growth\\"  + fname_out_bases[jj] + '_growth.csv' )
+        fname = os.path.normpath(base_dir + "/microarray_data/GSE36253_Growth/"  + fname_out_bases[jj] + '_growth.csv' )
         growth_exp.to_csv(fname)
         print fname + ' saved'
         
         if species_list[jj] != 'Saccharomyces bayanus':
             #There is no stress dataset for S. bayanus
             stress_exp = parse_micro_data(species_list[jj],'Stress',orf_lookup)
-            fname = os.path.normpath(base_dir + "\microarray_data\\GSE38478_Stress\\"  + fname_out_bases[jj] + '_stress.csv' )
+            # Gabe 7/12/16
+            # fname = os.path.normpath(base_dir + "\microarray_data\\GSE38478_Stress\\"  + fname_out_bases[jj] + '_stress.csv' )
+            fname = os.path.normpath(base_dir + "/microarray_data/GSE38478_Stress/"  + fname_out_bases[jj] + '_stress.csv' )
             stress_exp.to_csv(fname)
             print fname + ' saved'
     
@@ -253,7 +261,10 @@ def make_data_tables(species_list,fname_out_bases, base_dir):
 def read_SGD_features():
     
     #Read in orf/name file and make it a dictionary
-    SC_features_fname = os.path.normpath(data_dir + "\ortholog_files\\SGD_features.tab")
+    # Gabe 7/12/16
+    # SC_features_fname = os.path.normpath(data_dir + "\ortholog_files\\SGD_features.tab")
+    SC_features_fname = os.path.normpath(data_dir + "/ortholog_files/SGD_features.tab")
+
     SC_features = pd.read_csv(SC_features_fname, sep = '\t', header=None)
     SC_orfs = SC_features.groupby(1).get_group('ORF')
     
@@ -268,7 +279,9 @@ def read_orth_lookup_table(species1, species2):
     #For a given species read in the ortholog file, make a dictionary
     orth_file_abbrev = {'Kluyveromyces lactis': 'Klac', 'Saccharomyces cerevisiae': 'Scer', 'Candida glabrata':'Cgla', 'Saccharomyces castellii' : 'Scas', 'Saccharomyces bayanus' : 'Sbay'}
     orth_fname = orth_file_abbrev[species1] + "-" + orth_file_abbrev[species2] + "-orthologs.txt"
-    orth_fname = os.path.normpath(data_dir + "\ortholog_files\\" + orth_fname)
+    # Gabe 7/12/16
+    # orth_fname = os.path.normpath(data_dir + "\ortholog_files\\" + orth_fname)
+    orth_fname = os.path.normpath(data_dir + "/ortholog_files/" + orth_fname)
     
     #There are some orfs that have multiple orthologs - in that case both will be used
     with open(orth_fname) as f:
