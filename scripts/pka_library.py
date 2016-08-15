@@ -36,6 +36,8 @@ NEGATIVE_LOG_CUTOFF = -6.0
 species_list = ['Saccharomyces cerevisiae', 'Saccharomyces bayanus', 
 				'Candida glabrata', 'Saccharomyces castellii',
 				'Kluyveromyces lactis']
+
+# species_list = ['Candida glabrata']
 # Refernce dictionary for creating file names
 species_name_dict = {'Saccharomyces cerevisiae' : 'SCer',
                     'Kluyveromyces lactis': 'KLac', 
@@ -125,47 +127,55 @@ def compile_total_data():
     # --------------------------------------------------------------- #
     #   # Add Susan's Data #
     # --------------------------------------------------------------- #
-    ORF_gene_table, gene_ORF_table = io_library.read_SGD_features()
-    fname = base_dir + '/Susan_UpAndDownRegulatedGenes4fold_MyAndOShea.xlsx'
-    f = open(fname)
-    data_high = pd.read_excel(f, sheetname = 0)
-    high_gene_names = data_high['Genes'].values.tolist()
-    high_gene_susan = data_high['My foldchange'].values.tolist()
-    high_gene_oshea = data_high['Oshea foldchange'].values.tolist()
-    high_gene_ORFs = []
-    for gene in high_gene_names:
-        if gene in ORF_gene_table:
-            high_gene_ORFs.append(ORF_gene_table[gene])
-        else:
-            high_gene_ORFs.append(gene)
+    if 'Saccharomyces cerevisiae' in species_list:
 
 
-    f = open(fname)
-    data_low = pd.read_excel(f, sheetname = 1)
-    low_gene_names = data_low['Genes'].values.tolist()
-    low_gene_susan = data_low['My foldchange'].values.tolist()
-    low_gene_oshea = data_low['Oshea foldchange'].values.tolist()
-    low_gene_ORFs = []
-    for gene in low_gene_names:
-        if gene in ORF_gene_table:
-            low_gene_ORFs.append(ORF_gene_table[gene])
-        else:
-            low_gene_ORFs.append(gene)
-
-    condition_list.append('Saccharomyces cerevisiae:susan')
-    total_data['Saccharomyces cerevisiae']['susan'] = {}
-    total_data['Saccharomyces cerevisiae']['susan']['Values'] = high_gene_susan + low_gene_susan
-    # total_data['Saccharomyces cerevisiae']['susan']['Genes'] = high_gene_names + low_gene_names
-    total_data['Saccharomyces cerevisiae']['susan']['Genes'] = high_gene_ORFs + low_gene_ORFs
-
-    condition_list.append('Saccharomyces cerevisiae:oshea')
-    total_data['Saccharomyces cerevisiae']['oshea'] = {}
-    total_data['Saccharomyces cerevisiae']['oshea']['Values'] = high_gene_oshea + low_gene_oshea
-    # total_data['Saccharomyces cerevisiae']['oshea']['Genes'] = high_gene_names + low_gene_names
-    total_data['Saccharomyces cerevisiae']['oshea']['Genes'] = high_gene_ORFs + low_gene_ORFs
+        ORF_gene_table, gene_ORF_table = io_library.read_SGD_features()
+        fname = base_dir + '/Susan_UpAndDownRegulatedGenes4fold_MyAndOShea.xlsx'
+        f = open(fname)
+        data_high = pd.read_excel(f, sheetname = 0)
+        high_gene_names = data_high['Genes'].values.tolist()
+        high_gene_susan = data_high['My foldchange'].values.tolist()
+        high_gene_oshea = data_high['Oshea foldchange'].values.tolist()
+        high_gene_ORFs = []
+        for gene in high_gene_names:
+            if gene in ORF_gene_table:
+                high_gene_ORFs.append(ORF_gene_table[gene])
+            else:
+                high_gene_ORFs.append(gene)
 
 
+        f = open(fname)
+        data_low = pd.read_excel(f, sheetname = 1)
+        low_gene_names = data_low['Genes'].values.tolist()
+        low_gene_susan = data_low['My foldchange'].values.tolist()
+        low_gene_oshea = data_low['Oshea foldchange'].values.tolist()
+        low_gene_ORFs = []
+        for gene in low_gene_names:
+            if gene in ORF_gene_table:
+                low_gene_ORFs.append(ORF_gene_table[gene])
+            else:
+                low_gene_ORFs.append(gene)
 
+        condition_list.append('Saccharomyces cerevisiae:susan')
+        total_data['Saccharomyces cerevisiae']['susan'] = {}
+        total_data['Saccharomyces cerevisiae']['susan']['Values'] = high_gene_susan + low_gene_susan
+        # total_data['Saccharomyces cerevisiae']['susan']['Genes'] = high_gene_names + low_gene_names
+        total_data['Saccharomyces cerevisiae']['susan']['Genes'] = high_gene_ORFs + low_gene_ORFs
+
+        condition_list.append('Saccharomyces cerevisiae:oshea')
+        total_data['Saccharomyces cerevisiae']['oshea'] = {}
+        total_data['Saccharomyces cerevisiae']['oshea']['Values'] = high_gene_oshea + low_gene_oshea
+        # total_data['Saccharomyces cerevisiae']['oshea']['Genes'] = high_gene_names + low_gene_names
+        total_data['Saccharomyces cerevisiae']['oshea']['Genes'] = high_gene_ORFs + low_gene_ORFs
+
+
+
+
+    # ----------------------------------------------------------------------------------------------------------------
+
+
+    # ----------------------------------------------------------------------------------------------------------------
 
     # ----------------------------------------------------------------------- #
     #   # Get average, max, and min column values from common conditions #
@@ -195,7 +205,7 @@ def compile_total_data():
                 temp_values_list.append(total_data[species][condition]['Values'])
             else: 
 
-                if len(temp_values_list) > 0:
+                if len(temp_values_list) > 1:
                     values_avg, values_max, values_min = collapse_values_list(temp_values_list)
                     genes = total_data[species][prev_condition]['Genes']
                     condition_name = test_name_prev
@@ -219,6 +229,11 @@ def compile_total_data():
 
         for condition in conditions_to_append:
             total_data[species][condition] = conditions_to_append[condition]
+
+    # ----------------------------------------------------------------------------------------------------------------
+
+
+    # ----------------------------------------------------------------------------------------------------------------
 
 
     return total_data, condition_list
@@ -423,8 +438,61 @@ def create_cross_data(seed_data, total_data, condition_list):
 
 def sort_conditions(conditions):
 
-    sorted_conditions = list(conditions)
-    sorted_conditions.sort()
+    # --------------------------------------------- #
+    # Standard alphabetical sort
+    # --------------------------------------------- #
+    # sorted_conditions = list(conditions)
+    # sorted_conditions.sort()
+    # --------------------------------------------- #
+
+    # --------------------------------------------- #
+    # Sort alphabetically, except group the growth
+    # conditions time-sequentially to preserve
+    # temporal patterns
+    # --------------------------------------------- #
+    sorted_conditions = []
+    for species in species_list:
+        temp_condition_list = []
+        for condition in conditions:
+            if species in condition:
+                temp_condition_list.append(condition)
+
+        # contains_growth_condition = True
+        # while contains_growth_condition:
+        for condition in temp_condition_list:
+            if 'DS/LOG' in condition:
+                sorted_conditions.append(condition)
+                temp_condition_list.remove(condition)
+        for condition in temp_condition_list:
+            if 'ELL/LOG' in condition:
+                sorted_conditions.append(condition)
+                temp_condition_list.remove(condition)
+        for condition in temp_condition_list: 
+            if 'LAG/LOG' in condition:
+                sorted_conditions.append(condition)
+                temp_condition_list.remove(condition)
+        for condition in temp_condition_list:
+            if 'LL/LOG' in condition:
+                sorted_conditions.append(condition)
+                temp_condition_list.remove(condition)
+        for condition in temp_condition_list:
+            if 'LPS/LOG' in condition:
+                sorted_conditions.append(condition)
+                temp_condition_list.remove(condition)
+        for condition in temp_condition_list:
+            if 'PLAT/LOG' in condition:
+                sorted_conditions.append(condition)
+                temp_condition_list.remove(condition)
+        for condition in temp_condition_list:
+            if 'PS/LOG' in condition:
+                sorted_conditions.append(condition)
+                temp_condition_list.remove(condition)
+                
+        temp_condition_list.sort()
+        sorted_conditions = sorted_conditions + temp_condition_list
+
+
+
     return sorted_conditions
 
 
@@ -494,13 +562,47 @@ def create_plotting_data(seed_data, cross_data):
             for i in range(repeats[seed_gene] - len(cross_data[condition]['Seed Gene Map'][seed_gene])):
                 condition_values.append(float('nan'))
 
-        plotting_data[:, column_counter] = condition_values
+        plotting_data[:, column_counter + 1] = condition_values
 
 
 
 
 
     return plotting_data, plotting_labels_x, plotting_labels_y
+
+
+# --------------------------------------------------------------------------------- # 
+
+# --------------------------------------------------------------------------------- #
+
+def condense_labels(labels):
+
+
+    labels[0] = ' '
+
+    prev_label_list = [' ']
+
+    for index, label in enumerate(labels):
+        split_label_list = label.split('_')
+        last_element_index = len(split_label_list) - 1
+
+        # print '---------------------------------------------'
+        # print split_label_list[0 : last_element_index]
+        # print prev_label_list
+        # print '---------------------------------------------'
+
+        if index == 1:
+            continue
+        elif split_label_list[0 : last_element_index] == prev_label_list:
+            # labels[index] = split_label_list[last_element_index]
+            labels[index] = label.split(':')[1]
+        else:
+            prev_label_list = split_label_list[0 : last_element_index]
+
+    # for label_index, condition in enumerate(labels):
+        # labels[label_index] = condition[0:5]
+
+    return labels
 
 
 # --------------------------------------------------------------------------------- #
@@ -520,8 +622,7 @@ def plot_data(plotting_data, plotting_labels_x, plotting_labels_y):
                 species_label_indices[species_index] = condition_index + 1
                 break
 
-    for label_index, condition in enumerate(plotting_labels_x):
-        plotting_labels_x[label_index] = condition[0:5]
+    plotting_labels_x = condense_labels(plotting_labels_x)
 
 
 
@@ -553,7 +654,8 @@ def plot_data(plotting_data, plotting_labels_x, plotting_labels_y):
 # --------------------------------------------------------------------------------- #
 
 total_data, condition_list = compile_total_data()
-condition_key = create_condition_key('SCer', 'susan')
+# condition_key = create_condition_key('SCer', 'susan')
+condition_key = create_condition_key('CGla', 'NaCl_max')
 
 seed_gene_list = []
 seed_data = get_seed_data(10, 10, seed_gene_list, total_data, condition_key)
