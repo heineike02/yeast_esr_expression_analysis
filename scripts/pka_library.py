@@ -14,6 +14,7 @@ from IPython.core.debugger import Tracer
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt 
+import seaborn as sns
 # import seaborn as sns
 
 
@@ -124,12 +125,19 @@ def compile_total_data():
     # --------------------------------------------------------------- #
     #   # Add Susan's Data #
     # --------------------------------------------------------------- #
+    ORF_gene_table, gene_ORF_table = io_library.read_SGD_features()
     fname = base_dir + '/Susan_UpAndDownRegulatedGenes4fold_MyAndOShea.xlsx'
     f = open(fname)
     data_high = pd.read_excel(f, sheetname = 0)
     high_gene_names = data_high['Genes'].values.tolist()
     high_gene_susan = data_high['My foldchange'].values.tolist()
     high_gene_oshea = data_high['Oshea foldchange'].values.tolist()
+    high_gene_ORFs = []
+    for gene in high_gene_names:
+        if gene in ORF_gene_table:
+            high_gene_ORFs.append(ORF_gene_table[gene])
+        else:
+            high_gene_ORFs.append(gene)
 
 
     f = open(fname)
@@ -137,16 +145,24 @@ def compile_total_data():
     low_gene_names = data_low['Genes'].values.tolist()
     low_gene_susan = data_low['My foldchange'].values.tolist()
     low_gene_oshea = data_low['Oshea foldchange'].values.tolist()
+    low_gene_ORFs = []
+    for gene in low_gene_names:
+        if gene in ORF_gene_table:
+            low_gene_ORFs.append(ORF_gene_table[gene])
+        else:
+            low_gene_ORFs.append(gene)
 
     condition_list.append('Saccharomyces cerevisiae:susan')
     total_data['Saccharomyces cerevisiae']['susan'] = {}
     total_data['Saccharomyces cerevisiae']['susan']['Values'] = high_gene_susan + low_gene_susan
-    total_data['Saccharomyces cerevisiae']['susan']['Genes'] = high_gene_names + low_gene_names
+    # total_data['Saccharomyces cerevisiae']['susan']['Genes'] = high_gene_names + low_gene_names
+    total_data['Saccharomyces cerevisiae']['susan']['Genes'] = high_gene_ORFs + low_gene_ORFs
 
     condition_list.append('Saccharomyces cerevisiae:oshea')
     total_data['Saccharomyces cerevisiae']['oshea'] = {}
     total_data['Saccharomyces cerevisiae']['oshea']['Values'] = high_gene_oshea + low_gene_oshea
-    total_data['Saccharomyces cerevisiae']['oshea']['Genes'] = high_gene_names + low_gene_names
+    # total_data['Saccharomyces cerevisiae']['oshea']['Genes'] = high_gene_names + low_gene_names
+    total_data['Saccharomyces cerevisiae']['oshea']['Genes'] = high_gene_ORFs + low_gene_ORFs
 
 
 
@@ -190,9 +206,12 @@ def compile_total_data():
                     condition_list.append(species + ':' + condition_name_avg)
                     condition_list.append(species + ':' + condition_name_max)
                     condition_list.append(species + ':' + condition_name_min)
+
+
                     conditions_to_append[condition_name_avg] = {'Genes' : genes, 'Values' : values_avg}
                     conditions_to_append[condition_name_max] = {'Genes' : genes, 'Values' : values_max}
                     conditions_to_append[condition_name_min] = {'Genes' : genes, 'Values' : values_min}
+
 
                 temp_values_list = [total_data[species][condition]['Values']]
                 prev_condition = condition
@@ -218,7 +237,8 @@ def data_by_key(condition_key, total_data):
 
 # --------------------------------------------------------------------------------- #
 
-def get_seed_data(activated_number, repressed_number, total_data, condition_key):
+def get_seed_data(activated_number, repressed_number, gene_list, total_data, condition_key, mode = 'top'):
+    # Mode can be 'top', 'all', or 'name'
     high_genes = []
     low_genes = []
     high_values = []
@@ -226,6 +246,7 @@ def get_seed_data(activated_number, repressed_number, total_data, condition_key)
     gene_value_map = {}
     value_gene_map = {}
     ORF_map = {}
+    ORFs = []
 
     data = data_by_key(condition_key, total_data)
 
@@ -233,20 +254,29 @@ def get_seed_data(activated_number, repressed_number, total_data, condition_key)
     data_frame_high = data_frame.sort_values('Values', ascending = False)
     data_frame_low = data_frame.sort_values('Values', ascending = True)
 
-    high_data = data_frame_high.values.tolist()[0:activated_number]
-    low_data = data_frame_low.values.tolist()[0:repressed_number]
+    if mode == 'top':
+        activated_index = activated_number
+        repressed_index = repressed_number
+    else:
+        activated_index = len(data_frame_high.values.tolist())
+        repressed_index = len(data_frame_low.values.tolist())
+
+    high_data = data_frame_high.values.tolist()[0:activated_index]
+    low_data = data_frame_low.values.tolist()[0:repressed_index]
 
     for data_pair in high_data:
-        high_genes.append(data_pair[0])
-        high_values.append(data_pair[1])
-        gene_value_map[data_pair[0]] = data_pair[1]
-        value_gene_map[data_pair[1]] = data_pair[0]
+        if mode != 'name' or data_pair[0] in gene_list:
+            high_genes.append(data_pair[0])
+            high_values.append(data_pair[1])
+            gene_value_map[data_pair[0]] = data_pair[1]
+            value_gene_map[data_pair[1]] = data_pair[0]
 
     for data_pair in low_data:
-        low_genes.append(data_pair[0])
-        low_values.append(data_pair[1])
-        gene_value_map[data_pair[0]] = data_pair[1]
-        value_gene_map[data_pair[1]] = data_pair[0]
+        if mode != 'name' or data_pair[0] in gene_list:
+            low_genes.append(data_pair[0])
+            low_values.append(data_pair[1])
+            gene_value_map[data_pair[0]] = data_pair[1]
+            value_gene_map[data_pair[1]] = data_pair[0]
 
     genes = high_genes + low_genes
     values = high_values + low_values
@@ -257,11 +287,14 @@ def get_seed_data(activated_number, repressed_number, total_data, condition_key)
         for gene in genes:
             if gene in ORF_gene_table:
                 ORF_map[gene] = ORF_gene_table[gene]
+                ORFs.append(ORF_gene_table[gene])
             else:
                 ORF_map[gene] = gene
+                ORFs.append(gene)
     else:
         for gene in genes:
             ORF_map[gene] = gene
+            ORFs.append(gene)
 
     seed_data = {}
     seed_data['Genes'] = genes
@@ -274,6 +307,7 @@ def get_seed_data(activated_number, repressed_number, total_data, condition_key)
     seed_data['Gene Map'] = gene_value_map
     seed_data['Value Map'] = value_gene_map
     seed_data['ORF Map'] = ORF_map
+    seed_data['ORFs'] = ORFs
 
     return seed_data
 # --------------------------------------------------------------------------------- #
@@ -305,76 +339,81 @@ def get_condition(condition_key):
 
 # --------------------------------------------------------------------------------- #
 
-def create_cross_data(seed_data, total_data, condition_list, selection = 'All'):
+def create_cross_data(seed_data, total_data, condition_list):
 
     cross_data = {}
-    condition_key = seed_data['Condition Key']
-    seed_species = get_species(condition_key)
-    
-    if selection == 'High':
-        genes_selector = 'High Genes'
-    elif selection == 'Low':
-        genes_selector = 'Low Genes'
-    else:
-        genes_selector = 'Genes'
+
+    seed_genes = seed_data['Genes']
+    seed_genes_ORFs = seed_data['ORFs']
+    seed_values = seed_data['Values']
+    seed_condition = seed_data['Condition Key']
+    seed_species = get_species(seed_condition)
 
     for condition in condition_list:
-        print condition
-
-
-        if condition != condition_key:
-            condition_name = get_condition(condition)
+        if condition != seed_condition:
             cross_data[condition] = {}
-            species = get_species(condition)
-            # orth_table_forward = io_library.read_orth_lookup_table(seed_species, species)
-            orth_table_backward = io_library.read_orth_lookup_table(species, seed_species)
-            genes_list = total_data[species][condition_name]['Genes']
-            values_list = total_data[species][condition_name]['Values']
-
-            print len(genes_list)
-            print len(values_list)
-
-            indices_to_remove = []
-            # print condition
-            # print genes_list
-            for gene_index, gene in enumerate(genes_list):
-                # print species
-                # print gene
-                if gene not in orth_table_backward:
-                    indices_to_remove.append(gene_index)
-                    # continue
-                # elif orth_table_backward[gene] not in seed_data[genes_selector]:
-                elif 'NONE' in orth_table_backward[gene]:
-                    # continue
-                    indices_to_remove.append(gene_index)
-
-                else:
-                    continue
-
-                #     in_seed_data = False
-                #     for lookup_gene in orth_table_backward[gene]:
-                #         if lookup_gene in seed_data['ORF Map']:
-                #             in_seed_data = True
-                # # elif orth_table_backward[gene] not in seed_data['ORF Map']:
-                #     if not in_seed_data:
-                #         indices_to_remove.append(gene_index)
-
-
-            # print indices_to_remove
-            for index_counter, index in enumerate(indices_to_remove):
-                genes_list.pop(index - index_counter)
-                values_list.pop(index - index_counter)
-                # print 'genes list = ' + str(len(genes_list))
-                # print 'values list = ' + str(len(values_list))
-
-
-            cross_data[condition]['Genes'] = genes_list
-            cross_data[condition]['Values'] = values_list
+            cross_data[condition]['Genes'] = []
+            cross_data[condition]['Values'] = []
+            cross_data[condition]['Gene Map'] = {}
+            cross_data[condition]['Value Map'] = {}
+            cross_data[condition]['Seed Gene Map'] = {}
 
             
-            print len(genes_list)
-            print len(values_list)
+            current_species = get_species(condition)
+            if seed_species != current_species:
+                orth_table = io_library.read_orth_lookup_table(seed_species, current_species)
+                
+                for seed_gene_ORF in seed_genes_ORFs:
 
+                    cross_data[condition]['Seed Gene Map'][seed_gene_ORF] = []
+
+                    if seed_gene_ORF not in orth_table:
+                        cross_data[condition]['Genes'].append('NONE')
+                        # cross_data[condition]['Values'].append('NONE')
+                        cross_data[condition]['Seed Gene Map'][seed_gene_ORF].append('NONE')
+                    elif orth_table[seed_gene_ORF] == ['NONE']:
+                        cross_data[condition]['Genes'].append('NONE')
+                        # cross_data[condition]['Values'].append('NONE')
+                        cross_data[condition]['Seed Gene Map'][seed_gene_ORF].append('NONE')
+                    else:
+                        for gene in orth_table[seed_gene_ORF]:
+                            cross_data[condition]['Genes'].append(gene)
+                            cross_data[condition]['Seed Gene Map'][seed_gene_ORF].append(gene)
+            else:
+                cross_data[condition]['Genes'] = seed_genes_ORFs
+                for gene in seed_genes_ORFs:
+                    cross_data[condition]['Seed Gene Map'][gene] = [gene]
+
+
+
+    for condition in cross_data:
+        search_species = get_species(condition)
+        search_condition = get_condition(condition)
+        
+        # if search_species != seed_species:
+        for search_gene in cross_data[condition]['Genes']:
+            if search_gene == 'NONE':
+                cross_data[condition]['Values'].append(float('nan'))
+                cross_data[condition]['Gene Map'][search_gene] = float('nan')
+            elif total_data[search_species][search_condition]['Genes'].count(search_gene) == 0:
+                cross_data[condition]['Values'].append(float('nan'))
+                cross_data[condition]['Gene Map'][search_gene] = float('nan')
+            else:
+                gene_index = total_data[search_species][search_condition]['Genes'].index(search_gene)
+                gene_value = total_data[search_species][search_condition]['Values'][gene_index]
+                cross_data[condition]['Values'].append(gene_value)
+                cross_data[condition]['Gene Map'][search_gene] = gene_value
+                cross_data[condition]['Value Map'][gene_value] = search_gene
+
+        # else:
+        #     for search_gene in cross_data[condition]['Genes']:
+        #         gene_index = total_data[search_species][search_condition]['Genes'].index(search_gene)
+        #         gene_value = total_data[search_species][search_condition]['Values'][gene_index]
+        #         cross_data[condition]['Values'].append(gene_value)
+        #         cross_data[condition]['Gene Map'][search_gene] = gene_value
+        #         cross_data[condition]['Value Map'][gene_value] = search_gene
+
+    
     return cross_data
 
 
@@ -384,83 +423,129 @@ def create_cross_data(seed_data, total_data, condition_list, selection = 'All'):
 
 # --------------------------------------------------------------------------------- #
 
-def create_plotting_data(seed_data, cross_data, selection = 'All'):
+def create_plotting_data(seed_data, cross_data):
 
-    if selection == 'High':
-        genes_selector = 'High Genes'
-        values_selector = 'High Values'
-    elif selection == 'Low':
-        genes_selector = 'Low Genes'
-        values_selector = 'Low Values'
-    else:
-        genes_selector = 'Genes'
-        values_selector = 'Values'
+    repeats = {}
+    plotting_columns = []
+    plotting_labels_x = []
 
-    gene_repeats = np.ones(len(seed_data[genes_selector]))
-    repeat_numbers = {}
-    seed_species = get_species(seed_data['Condition Key'])
+    seed_genes = seed_data['ORFs']
 
+    for seed_gene in seed_genes:
+        repeats[seed_gene] = 1
+
+    plotting_seed_values = seed_data['Values']
+    plotting_labels_y = seed_data['Genes']
+
+    num_columns = 1
     for condition in cross_data:
-        species = get_species(condition)
-        orth_table = io_library.read_orth_lookup_table(seed_species, species)
+        num_columns += 1
+        for seed_gene in seed_genes:
+            repeats[seed_gene] = max(repeats[seed_gene], len(cross_data[condition]['Seed Gene Map'][seed_gene]))
 
-        # print orth_table
-        for gene_index, gene in enumerate(seed_data[genes_selector]):
-            lookup_name = seed_data['ORF Map'][gene]
-            if lookup_name in orth_table:
-                gene_repeats[gene_index] = max(gene_repeats[gene_index], len(orth_table[lookup_name]))
+    for seed_gene in seed_genes:
+        for i in range(repeats[seed_gene] - 1):
+            gene_index = plotting_labels_y.index(seed_gene)
+            gene_value = plotting_seed_values[gene_index]
+            plotting_seed_values.insert(gene_index, gene_value)
+            plotting_labels_y.insert(gene_index, ' ')
 
-    for condition in cross_data:
-        # print condition
-        # print cross_data[condition]
-        repeat_numbers[condition] = np.ones(len(cross_data[condition]['Genes']))
+    num_rows = len(plotting_seed_values)
+    plotting_data = np.zeros((num_rows, num_columns))
+    plotting_data[:, 0] = plotting_seed_values
 
-        for gene_index, gene in enumerate(seed_data[genes_selector]):
-            lookup_name = seed_data['ORF Map'][gene]
-            if lookup_name in orth_table:
-                # print len(repeat_numbers[condition])
-                repeat_numbers[condition][gene_index] += gene_repeats - len(orth_table[gene])
+
+    if 'susan' in seed_data['Condition Key'] or 'oshea' in seed_data['Condition Key']:
+        plotting_labels_y = []
+        ORF_gene_table, gene_ORF_table = io_library.read_SGD_features()
+        for seed_gene in seed_data['Genes']:
+            if seed_gene != ' ':
+                plotting_labels_y.append(gene_ORF_table[seed_gene])
             else:
-                repeat_numbers[condition][gene_index] = -1
+                plotting_labels_y.append(' ')
+
+    for column_counter, condition in enumerate(cross_data):
+        condition_genes = cross_data[condition]['Genes']
+        condition_values = []
+        plotting_labels_x.append(condition)
+
+        for seed_gene in seed_genes:
+
+
+            for gene in cross_data[condition]['Seed Gene Map'][seed_gene]:
+                if gene != 'NONE':
+                    # print cross_data[condition]['Gene Map']
+                    condition_values.append(cross_data[condition]['Gene Map'][gene])
+                else:
+                    condition_values.append(float('nan'))
+            for i in range(repeats[seed_gene] - len(cross_data[condition]['Seed Gene Map'][seed_gene])):
+                condition_values.append(float('nan'))
+
+        plotting_data[:, column_counter + 1] = condition_values
 
 
 
-    # num_columns = 
+
+
+    return plotting_data, plotting_labels_x, plotting_labels_y
+
+
+# --------------------------------------------------------------------------------- #
+
+# --------------------------------------------------------------------------------- #
+
+def plot_data(plotting_data, plotting_labels_x, plotting_labels_y):
+
+
+    species_label_indices = np.ones(len(species_list))
+    species_label_indices *= float('nan')
+    # plotting_data_search = plotting_data[ : , 1: ]
+
+    for species_index, species in enumerate(species_list):
+        for condition_index, condition in enumerate(plotting_labels_x):
+            if species in condition:
+                species_label_indices[species_index] = condition_index + 1
+                break
+
+    for label_index, condition in enumerate(plotting_labels_x):
+        plotting_labels_x[label_index] = condition[0:5]
 
 
 
+    num_columns = len(plotting_labels_y) + 1
+    cmap = mpl.cm.RdBu_r
+    cmap.set_bad('k',1.0)
+    fig, ax = plt.subplots()
+    ax = sns.heatmap(plotting_data, cmap = cmap, ax = ax, yticklabels = plotting_labels_y, xticklabels = plotting_labels_x)
+    ylocs, ylabels = plt.yticks()
+    plt.setp(ylabels, rotation = 0)
+    xlocs, xlabels = plt.xticks()
+    plt.setp(xlabels, rotation = 90)
+    species_labels = []
+    for species in species_list:
+        species_labels.append(species_name_dict[species])
+    newax = ax.twiny()
+    for i in range(len(species_label_indices)):
+        species_label_indices[i] = species_label_indices[i] / float(num_columns)
 
+    newax.set_xticklabels(species_labels)
+    newax.set_xticks(species_label_indices)
+    plt.tight_layout()
+    plt.get_current_fig_manager().window.raise_()
+    plt.show()
 
-    return species
 
 # --------------------------------------------------------------------------------- #
 # #### MAIN #####
 # --------------------------------------------------------------------------------- #
 
-# high_genes, low_genes = get_seed_genes(10, 10, SC_source = 'oshea')
-
-# orth_table_test = io_library.read_orth_lookup_table('Candida glabrata', 'Saccharomyces castellii')
-
-
 total_data, condition_list = compile_total_data()
-
 condition_key = create_condition_key('SCer', 'susan')
-seed_data = get_seed_data(10, 10, total_data, condition_key)
 
-print total_data['Saccharomyces cerevisiae']['hydrogen peroxide_avg']
+seed_gene_list = []
+seed_data = get_seed_data(10, 10, seed_gene_list, total_data, condition_key)
 
-# cross_data = create_cross_data(seed_data, total_data, condition_list)
-# condition_key = cross_data.keys()[1]
-# print cross_data[condition_key]
-
-
-
-# plotting_data = create_plotting_data(seed_data, cross_data)
-# print cross_data.keys()
-# print len(cross_data)
-
-
-
-
-
+cross_data = create_cross_data(seed_data, total_data, condition_list)
+plotting_data, plotting_labels_x, plotting_labels_y = create_plotting_data(seed_data, cross_data)
+plot_data(plotting_data, plotting_labels_x, plotting_labels_y)
 

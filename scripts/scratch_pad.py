@@ -233,3 +233,215 @@ def plot_data(plotting_data, species_data):
 #     SC_genes = pd.concat([high_genes, low_genes])
 
 #     return SC_genes
+
+
+
+
+
+
+
+
+
+
+
+# --------------------------------------------------------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------------------------------------------------------
+
+
+def create_cross_data(seed_data, total_data, condition_list, selection = 'All'):
+
+    cross_data = {}
+    condition_key = seed_data['Condition Key']
+    seed_species = get_species(condition_key)
+
+    
+    if selection == 'High':
+        genes_selector = 'High Genes'
+    elif selection == 'Low':
+        genes_selector = 'Low Genes'
+    else:
+        genes_selector = 'Genes'
+
+    seed_genes = seed_data[genes_selector]
+    print seed_genes
+
+
+    for index, condition in enumerate(condition_list):
+        if condition != condition_key:
+            condition_name = get_condition(condition)
+            cross_data[condition] = {}
+            species = get_species(condition)
+            orth_table_forward = io_library.read_orth_lookup_table(seed_species, species)
+            orth_table_backward = io_library.read_orth_lookup_table(species, seed_species)
+
+            seed_genes_orth = []
+
+            for gene in seed_genes:
+                ORF_map = seed_data['ORF Map']
+                if ORF_map[gene] in orth_table_forward:
+                    for orth in orth_table_forward[ORF_map[gene]]:
+                        seed_genes_orth.append(orth)
+                else:
+                    seed_genes_orth.append('NONE')
+                    # seed_genes_orth.append(orth_table_forward[ORF_map[gene]])
+            # print seed_genes_orth
+            # print len(seed_genes_orth)
+            
+            # print len(total_data[species][condition_name]['Genes']) == len(total_data[species][condition_name]['Values'])
+            # print len(total_data['Saccharomyces cerevisiae']['hydrogen peroxide_avg']['Genes']) == len(total_data['Saccharomyces cerevisiae']['hydrogen peroxide_avg']['Values'])
+
+            genes_list = total_data[species][condition_name]['Genes']
+            values_list = total_data[species][condition_name]['Values']
+            # print condition
+            # print species
+            # print condition_name
+            # print len(genes_list) == len(values_list)
+
+            # genes_list = []
+            # values_list = []
+
+            # if len(genes_list) != len(values_list):
+            #     print '-----------------------------------'
+            #     print condition
+            #     print condition_name
+            #     print '-----------------------------------'
+
+
+            # print len(genes_list)
+            # print len(values_list)
+
+            indices_to_remove = []
+            # print condition
+            # print genes_list
+
+
+            for gene_index, gene in enumerate(genes_list):
+                # print species
+                # print gene
+                # if gene not in orth_table_backward:
+                    # indices_to_remove.append(gene_index)
+                    # continue
+                # elif orth_table_backward[gene] not in seed_data[genes_selector]:
+                # elif 'NONE' in orth_table_backward[gene]:
+                    # continue
+                    # indices_to_remove.append(gene_index)
+
+                # elif gene not in seed_genes_orth:
+                if gene not in seed_genes_orth:
+                    indices_to_remove.append(gene_index)
+                else:
+                    continue
+
+            # indices_to_remove = [1]
+
+                #     in_seed_data = False
+                #     for lookup_gene in orth_table_backward[gene]:
+                #         if lookup_gene in seed_data['ORF Map']:
+                #             in_seed_data = True
+                # # elif orth_table_backward[gene] not in seed_data['ORF Map']:
+                #     if not in_seed_data:
+                #         indices_to_remove.append(gene_index)
+
+
+            # print indices_to_remove
+
+            # indices_to_remove = []
+
+
+            for index_counter, index in enumerate(indices_to_remove):
+                # genes_list.pop(index - index_counter)
+                # values_list.pop(index - index_counter)
+                # del genes_list[0]
+                # del values_list[0]
+                genes_list = genes_list[0 : index - index_counter] + genes_list[index - index_counter + 1 : ]
+                values_list = values_list[0 : index - index_counter] + values_list[index - index_counter + 1 : ]
+                # genes_list = genes_list[1:]
+                # values_list = values_list[1:]
+
+
+
+                # if len(genes_list) != len(values_list):
+                    # print condition + ' ' + str(len(genes_list) == len(values_list)) + ' INDEX ' + str(index_counter)
+            
+
+
+
+
+                # genes_list.pop(0)
+                # values_list.pop(0)
+                # i = 1
+
+            # print 'genes list = ' + str(len(genes_list))
+            # print 'values list = ' + str(len(values_list))
+
+
+            print condition + ' ' + str(len(genes_list))
+            cross_data[condition]['Genes'] = genes_list
+            cross_data[condition]['Values'] = values_list
+
+            # print len(genes_list) == len(values_list)
+
+            
+
+            
+            # print len(genes_list)
+            # print len(values_list)
+    # print '--------------------------------------------------------'
+    # for condition in cross_data:
+        # print condition + ' ' + str(len(cross_data[condition]['Genes']))
+
+    return cross_data
+
+
+
+
+
+# --------------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------------
+
+def create_plotting_data(seed_data, cross_data, selection = 'All'):
+
+    if selection == 'High':
+        genes_selector = 'High Genes'
+        values_selector = 'High Values'
+    elif selection == 'Low':
+        genes_selector = 'Low Genes'
+        values_selector = 'Low Values'
+    else:
+        genes_selector = 'Genes'
+        values_selector = 'Values'
+
+    gene_repeats = np.ones(len(seed_data[genes_selector]))
+    repeat_numbers = {}
+    seed_species = get_species(seed_data['Condition Key'])
+
+    for condition in cross_data:
+        species = get_species(condition)
+        orth_table = io_library.read_orth_lookup_table(seed_species, species)
+
+        # print orth_table
+        for gene_index, gene in enumerate(seed_data[genes_selector]):
+            lookup_name = seed_data['ORF Map'][gene]
+            if lookup_name in orth_table:
+                gene_repeats[gene_index] = max(gene_repeats[gene_index], len(orth_table[lookup_name]))
+
+    for condition in cross_data:
+        # print condition
+        # print cross_data[condition]
+        repeat_numbers[condition] = np.ones(len(cross_data[condition]['Genes']))
+
+        for gene_index, gene in enumerate(seed_data[genes_selector]):
+            lookup_name = seed_data['ORF Map'][gene]
+            if lookup_name in orth_table:
+                # print len(repeat_numbers[condition])
+                repeat_numbers[condition][gene_index] += gene_repeats - len(orth_table[gene])
+            else:
+                repeat_numbers[condition][gene_index] = -1
+
+
+
+    # num_columns = 
+
+    return species
