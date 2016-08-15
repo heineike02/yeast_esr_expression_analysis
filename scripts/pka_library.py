@@ -487,7 +487,7 @@ def sort_conditions(conditions):
             if 'PS/LOG' in condition:
                 sorted_conditions.append(condition)
                 temp_condition_list.remove(condition)
-                
+
         temp_condition_list.sort()
         sorted_conditions = sorted_conditions + temp_condition_list
 
@@ -563,7 +563,9 @@ def create_plotting_data(seed_data, cross_data):
                 condition_values.append(float('nan'))
 
         plotting_data[:, column_counter + 1] = condition_values
+        # plotting_labels_x = [' '] + plotting_labels_x
 
+    plotting_labels_x.insert(0, '')
 
 
 
@@ -578,7 +580,7 @@ def create_plotting_data(seed_data, cross_data):
 def condense_labels(labels):
 
 
-    labels[0] = ' '
+    # labels[0] = ' '
 
     prev_label_list = [' ']
 
@@ -591,12 +593,16 @@ def condense_labels(labels):
         # print prev_label_list
         # print '---------------------------------------------'
 
-        if index == 1:
+        if index == 0:
             continue
+        elif index == 1:
+            labels[index] = species_name_dict[label.split(':')[0]] + ':' + label.split(':')[1]
         elif split_label_list[0 : last_element_index] == prev_label_list:
             # labels[index] = split_label_list[last_element_index]
             labels[index] = label.split(':')[1]
         else:
+            # print label.split(':')
+            labels[index] = species_name_dict[label.split(':')[0]] + ':' + label.split(':')[1]
             prev_label_list = split_label_list[0 : last_element_index]
 
     # for label_index, condition in enumerate(labels):
@@ -609,7 +615,7 @@ def condense_labels(labels):
 
 # --------------------------------------------------------------------------------- #
 
-def plot_data(plotting_data, plotting_labels_x, plotting_labels_y):
+def plot_data(seed_data, plotting_data, plotting_labels_x, plotting_labels_y):
 
 
     species_label_indices = np.ones(len(species_list))
@@ -622,11 +628,13 @@ def plot_data(plotting_data, plotting_labels_x, plotting_labels_y):
                 species_label_indices[species_index] = condition_index + 1
                 break
 
+
     plotting_labels_x = condense_labels(plotting_labels_x)
 
 
 
-    num_columns = len(plotting_labels_y) + 1
+
+    num_columns = len(plotting_labels_x)
     cmap = mpl.cm.RdBu_r
     cmap.set_bad('k',1.0)
     fig, ax = plt.subplots()
@@ -641,9 +649,16 @@ def plot_data(plotting_data, plotting_labels_x, plotting_labels_y):
     newax = ax.twiny()
     for i in range(len(species_label_indices)):
         species_label_indices[i] = species_label_indices[i] / float(num_columns)
+        # if i > 0:
+        species_label_indices[i] -= 1 / float(num_columns)
 
     newax.set_xticklabels(species_labels)
     newax.set_xticks(species_label_indices)
+    title = plt.title('Seed Condition ' + seed_data['Condition Key'])
+    title.set_y(1.15)
+    plt.subplots_adjust(top=0.86)
+    # title = 'Seed Condition ' + seed_data['Condition Key']
+    # plt.text(0.5, 2, title, horizontalalignment = 'center', fontsize = 12)
     plt.tight_layout()
     plt.get_current_fig_manager().window.raise_()
     plt.show()
@@ -654,15 +669,15 @@ def plot_data(plotting_data, plotting_labels_x, plotting_labels_y):
 # --------------------------------------------------------------------------------- #
 
 total_data, condition_list = compile_total_data()
-# condition_key = create_condition_key('SCer', 'susan')
-condition_key = create_condition_key('CGla', 'NaCl_max')
+condition_key = create_condition_key('SCer', 'susan')
+# condition_key = create_condition_key('CGla', 'NaCl_max')
 
 seed_gene_list = []
 seed_data = get_seed_data(10, 10, seed_gene_list, total_data, condition_key)
 
 cross_data = create_cross_data(seed_data, total_data, condition_list)
 plotting_data, plotting_labels_x, plotting_labels_y = create_plotting_data(seed_data, cross_data)
-plot_data(plotting_data, plotting_labels_x, plotting_labels_y)
+plot_data(seed_data, plotting_data, plotting_labels_x, plotting_labels_y)
 
 
 # plotting_labels_x.sort()
