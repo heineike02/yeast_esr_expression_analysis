@@ -417,6 +417,16 @@ def create_cross_data(seed_data, total_data, condition_list):
     return cross_data
 
 
+# --------------------------------------------------------------------------------- #
+
+# --------------------------------------------------------------------------------- #
+
+def sort_conditions(conditions):
+
+    sorted_conditions = list(conditions)
+    sorted_conditions.sort()
+    return sorted_conditions
+
 
 
 # --------------------------------------------------------------------------------- #
@@ -464,10 +474,13 @@ def create_plotting_data(seed_data, cross_data):
             else:
                 plotting_labels_y.append(' ')
 
-    for column_counter, condition in enumerate(cross_data):
+    plotting_labels_x = sort_conditions(cross_data.keys())
+
+    # for column_counter, condition in enumerate(cross_data):
+    for column_counter, condition in enumerate(plotting_labels_x):
         condition_genes = cross_data[condition]['Genes']
         condition_values = []
-        plotting_labels_x.append(condition)
+        # plotting_labels_x.append(condition)
 
         for seed_gene in seed_genes:
 
@@ -481,7 +494,7 @@ def create_plotting_data(seed_data, cross_data):
             for i in range(repeats[seed_gene] - len(cross_data[condition]['Seed Gene Map'][seed_gene])):
                 condition_values.append(float('nan'))
 
-        plotting_data[:, column_counter + 1] = condition_values
+        plotting_data[:, column_counter] = condition_values
 
 
 
@@ -548,4 +561,11 @@ seed_data = get_seed_data(10, 10, seed_gene_list, total_data, condition_key)
 cross_data = create_cross_data(seed_data, total_data, condition_list)
 plotting_data, plotting_labels_x, plotting_labels_y = create_plotting_data(seed_data, cross_data)
 plot_data(plotting_data, plotting_labels_x, plotting_labels_y)
+
+
+# plotting_labels_x.sort()
+# for element in plotting_labels_x:
+    # print element
+
+
 
