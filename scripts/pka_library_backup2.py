@@ -669,7 +669,7 @@ def plot_data(seed_data, plotting_data, plotting_labels_x, plotting_labels_y):
 
 
 # --------------------------------------------------------------------------------- #
-# #### MAIN #####
+# #### MAIN ##### (for testing)
 # --------------------------------------------------------------------------------- #
 
 total_data, condition_list = compile_total_data()
@@ -683,10 +683,6 @@ cross_data = create_cross_data(seed_data, total_data, condition_list)
 plotting_data, plotting_labels_x, plotting_labels_y = create_plotting_data(seed_data, cross_data)
 plot_data(seed_data, plotting_data, plotting_labels_x, plotting_labels_y)
 
-
-# plotting_labels_x.sort()
-# for element in plotting_labels_x:
-    # print element
 
 
 
