@@ -525,20 +525,24 @@ def create_plotting_data(seed_data, cross_data):
         for i in range(repeats[seed_gene] - 1):
             gene_index = plotting_labels_y.index(seed_gene)
             gene_value = plotting_seed_values[gene_index]
-            plotting_seed_values.insert(gene_index, gene_value)
-            plotting_labels_y.insert(gene_index, ' ')
+            plotting_seed_values.insert(gene_index + 1, gene_value)
+            plotting_labels_y.insert(gene_index + 1, ' ')
 
     num_rows = len(plotting_seed_values)
     plotting_data = np.zeros((num_rows, num_columns))
     plotting_data[:, 0] = plotting_seed_values
 
 
-    if 'susan' in seed_data['Condition Key'] or 'oshea' in seed_data['Condition Key']:
+    # if 'susan' in seed_data['Condition Key'] or 'oshea' in seed_data['Condition Key']:
+    if 'Saccharomyces cerevisiae' in seed_data['Condition Key'] or 'oshea' in seed_data['Condition Key']:
         plotting_labels_y = []
         ORF_gene_table, gene_ORF_table = io_library.read_SGD_features()
         for seed_gene in seed_data['Genes']:
             if seed_gene != ' ':
-                plotting_labels_y.append(gene_ORF_table[seed_gene])
+                if type(gene_ORF_table[seed_gene]) != type(1.0) and seed_gene in gene_ORF_table:
+                    plotting_labels_y.append(gene_ORF_table[seed_gene])
+                else:
+                    plotting_labels_y.append(seed_gene)
             else:
                 plotting_labels_y.append(' ')
 
@@ -655,7 +659,7 @@ def plot_data(seed_data, plotting_data, plotting_labels_x, plotting_labels_y):
     newax.set_xticklabels(species_labels)
     newax.set_xticks(species_label_indices)
     title = plt.title('Seed Condition ' + seed_data['Condition Key'])
-    title.set_y(1.15)
+    title.set_y(1.05)
     plt.subplots_adjust(top=0.86)
     # title = 'Seed Condition ' + seed_data['Condition Key']
     # plt.text(0.5, 2, title, horizontalalignment = 'center', fontsize = 12)
@@ -669,11 +673,11 @@ def plot_data(seed_data, plotting_data, plotting_labels_x, plotting_labels_y):
 # --------------------------------------------------------------------------------- #
 
 total_data, condition_list = compile_total_data()
-condition_key = create_condition_key('SCer', 'susan')
-# condition_key = create_condition_key('CGla', 'NaCl_max')
+condition_key = create_condition_key('SCer', 'NaCl_max')
+# condition_key = create_condition_key('KLac', 'NaCl_max')
 
 seed_gene_list = []
-seed_data = get_seed_data(10, 10, seed_gene_list, total_data, condition_key)
+seed_data = get_seed_data(15, 0, seed_gene_list, total_data, condition_key)
 
 cross_data = create_cross_data(seed_data, total_data, condition_list)
 plotting_data, plotting_labels_x, plotting_labels_y = create_plotting_data(seed_data, cross_data)
