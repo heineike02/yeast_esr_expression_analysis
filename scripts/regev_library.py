@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt 
 import seaborn as sns
+import math
 # import seaborn as sns
 
 
@@ -61,10 +62,13 @@ def collapse_values_list(values_list):
     values_min = np.zeros(len(values_list[0]))
     values_avg = np.zeros(len(values_list[0]))
     for values in values_list:
-        values_max = np.maximum(values_max, values)
-        values_min = np.minimum(values_max, values)
+        # values_max = np.maximum(values_max, values)
+        values_max = np.fmax(values_max, values)
+        # values_min = np.minimum(values_max, values)
+        values_min = np.fmin(values_max, values)
 
-    values_avg = np.mean(values_list, axis = 0)
+    # values_avg = np.mean(values_list, axis = 0)
+    values_avg = np.nanmean(values_list, axis = 0)
 
     values_max = values_max.tolist()
     values_min = values_min.tolist()
@@ -673,11 +677,11 @@ def plot_data(seed_data, plotting_data, plotting_labels_x, plotting_labels_y):
 # --------------------------------------------------------------------------------- #
 
 total_data, condition_list = compile_total_data()
-condition_key = create_condition_key('SCer', 'NaCl_max')
+condition_key = create_condition_key('SCer', 'susan')
 # condition_key = create_condition_key('KLac', 'NaCl_max')
 
 seed_gene_list = []
-seed_data = get_seed_data(15, 0, seed_gene_list, total_data, condition_key)
+seed_data = get_seed_data(10, 10, seed_gene_list, total_data, condition_key)
 
 cross_data = create_cross_data(seed_data, total_data, condition_list)
 plotting_data, plotting_labels_x, plotting_labels_y = create_plotting_data(seed_data, cross_data)

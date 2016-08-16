@@ -1,3 +1,4 @@
+import pka_library_backup
 import os
 base_dir = os.path.normpath(os.path.dirname(os.getcwd()))
 import sys
@@ -9,7 +10,6 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt 
 import matplotlib as mpl
-import pka_library
 import scipy
 
 
@@ -53,22 +53,22 @@ species_name_dict = {'Saccharomyces cerevisiae' : 'SCer',
 
 
 orth_dict = io_library.read_orth_lookup_table('Saccharomyces cerevisiae', 'Candida glabrata')
-high_genes, low_genes = pka_library.get_genes_susan(POSITIVE_LOG_CUTOFF, NEGATIVE_LOG_CUTOFF)
-SC_genes = pka_library.concat_SC_genes(high_genes, low_genes)
-species_data, conditions, SC_genes_repeats = pka_library.compile_species_data(species_list, SC_genes)
+high_genes, low_genes = pka_library_backup.get_genes_susan(POSITIVE_LOG_CUTOFF, NEGATIVE_LOG_CUTOFF)
+SC_genes = pka_library_backup.concat_SC_genes(high_genes, low_genes)
+species_data, conditions, SC_genes_repeats = pka_library_backup.compile_species_data(species_list, SC_genes)
 gla_data = species_data['Candida glabrata']
 
 
 
-high_genes, low_genes = pka_library.get_genes_susan(POSITIVE_LOG_CUTOFF, -1000.0)
-SC_genes_high = pka_library.concat_SC_genes(high_genes, low_genes)
-species_data_high, conditions_high, SC_genes_repeats_high = pka_library.compile_species_data(species_list, SC_genes_high)
+high_genes, low_genes = pka_library_backup.get_genes_susan(POSITIVE_LOG_CUTOFF, -1000.0)
+SC_genes_high = pka_library_backup.concat_SC_genes(high_genes, low_genes)
+species_data_high, conditions_high, SC_genes_repeats_high = pka_library_backup.compile_species_data(species_list, SC_genes_high)
 gla_data_high = species_data_high['Candida glabrata']
 
 
-high_genes, low_genes = pka_library.get_genes_susan(1000, NEGATIVE_LOG_CUTOFF)
-SC_genes_low = pka_library.concat_SC_genes(high_genes, low_genes)
-species_data_low, conditions_low, SC_genes_repeats_low = pka_library.compile_species_data(species_list, SC_genes_low)
+high_genes, low_genes = pka_library_backup.get_genes_susan(1000, NEGATIVE_LOG_CUTOFF)
+SC_genes_low = pka_library_backup.concat_SC_genes(high_genes, low_genes)
+species_data_low, conditions_low, SC_genes_repeats_low = pka_library_backup.compile_species_data(species_list, SC_genes_low)
 gla_data_low = species_data_low['Candida glabrata']
 
 
