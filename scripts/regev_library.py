@@ -78,6 +78,108 @@ def collapse_values_list(values_list):
 
 
 
+# --------------------------------------------------------------------------------- #
+
+# --------------------------------------------------------------------------------- #
+
+def sort_conditions(conditions, mode = 'all'):
+
+    # --------------------------------------------- #
+    # Standard alphabetical sort
+    # --------------------------------------------- #
+    # sorted_conditions = list(conditions)
+    # sorted_conditions.sort()
+    # --------------------------------------------- #
+
+    # --------------------------------------------- #
+    # Sort alphabetically, except group the growth
+    # conditions time-sequentially to preserve
+    # temporal patterns
+    # --------------------------------------------- #
+    sorted_conditions = []
+    temp_condition_list = []
+
+    if mode == 'all':
+        iter_list = species_list
+    else:
+        iter_list = ['']
+
+    # for species in species_list:
+    for species in iter_list:
+        temp_condition_list = []
+        for condition in conditions:
+            if species in condition:
+                temp_condition_list.append(condition)
+
+    # for condition in conditions:
+        # if ':' not in conditions:
+
+
+        # print ';lkaja;lskdjfa;lksdjfa;lksdjfa;lksdfjal;sdkjfal;ksdjfal;kjsdf;lkajsd;fkljas;dlfja;lsdkfj'
+        # temp_condition_list = list(conditions)
+
+        # contains_growth_condition = True
+        # while contains_growth_condition:
+        for condition in temp_condition_list:
+            if 'susan' in condition:
+                sorted_conditions.append(condition)
+                temp_condition_list.remove(condition)
+
+        for condition in temp_condition_list:
+            if 'oshea' in condition:
+                sorted_conditions.append(condition)
+                temp_condition_list.remove(condition)
+
+        for condition in temp_condition_list:
+            if 'DS/LOG' in condition:
+                sorted_conditions.append(condition)
+                temp_condition_list.remove(condition)
+        for condition in temp_condition_list:
+            if 'ELL/LOG' in condition:
+                sorted_conditions.append(condition)
+                temp_condition_list.remove(condition)
+        for condition in temp_condition_list: 
+            if 'LAG/LOG' in condition:
+                sorted_conditions.append(condition)
+                temp_condition_list.remove(condition)
+        for condition in temp_condition_list:
+            if 'LL/LOG' in condition:
+                sorted_conditions.append(condition)
+                temp_condition_list.remove(condition)
+        for condition in temp_condition_list:
+            if 'LPS/LOG' in condition:
+                sorted_conditions.append(condition)
+                temp_condition_list.remove(condition)
+        for condition in temp_condition_list:
+            if 'PLAT/LOG' in condition:
+                sorted_conditions.append(condition)
+                temp_condition_list.remove(condition)
+        for condition in temp_condition_list:
+            if 'PS/LOG' in condition:
+                sorted_conditions.append(condition)
+                temp_condition_list.remove(condition)
+        for condition in temp_condition_list:
+            if 'Depletion_avg' in condition:
+                sorted_conditions.append(condition)
+                temp_condition_list.remove(condition)
+        for condition in temp_condition_list:
+            if 'Depletion_max' in condition:
+                sorted_conditions.append(condition)
+                temp_condition_list.remove(condition)
+        for condition in temp_condition_list:
+            if 'Depletion_min' in condition:
+                sorted_conditions.append(condition)
+                temp_condition_list.remove(condition)
+
+        temp_condition_list.sort()
+        sorted_conditions = sorted_conditions + temp_condition_list
+
+
+
+    return sorted_conditions
+
+
+
 
 
 # --------------------------------------------------------------------------------- #
@@ -202,12 +304,22 @@ def compile_total_data():
         test_name_prev = test_name_prev[len(test_name_prev) - 2]
         temp_values_list = []
 
-        for condition in total_data[species]:
-            test_name_current = condition.split('_')
-            test_name_current = test_name_current[len(test_name_current) - 2]
+        # for condition in total_data[species]:
+        for condition in sort_conditions(total_data[species], mode = 'subset'):
+            print condition
+            # Get the avg, min, and max values for Regev's data
+            if 'LOG' in condition:
+                test_name_current = 'Depletion'
+                # print species
+            else:
+                test_name_current = condition.split('_')
+                test_name_current = test_name_current[len(test_name_current) - 2]
+
+
             if test_name_prev == test_name_current:
                 temp_values_list.append(total_data[species][condition]['Values'])
             else: 
+                print species + ':' + test_name_prev
 
                 if len(temp_values_list) > 1:
                     values_avg, values_max, values_min = collapse_values_list(temp_values_list)
@@ -225,6 +337,7 @@ def compile_total_data():
                     conditions_to_append[condition_name_avg] = {'Genes' : genes, 'Values' : values_avg}
                     conditions_to_append[condition_name_max] = {'Genes' : genes, 'Values' : values_max}
                     conditions_to_append[condition_name_min] = {'Genes' : genes, 'Values' : values_min}
+
 
 
                 temp_values_list = [total_data[species][condition]['Values']]
@@ -434,70 +547,6 @@ def create_cross_data(seed_data, total_data, condition_list):
 
     
     return cross_data
-
-
-# --------------------------------------------------------------------------------- #
-
-# --------------------------------------------------------------------------------- #
-
-def sort_conditions(conditions):
-
-    # --------------------------------------------- #
-    # Standard alphabetical sort
-    # --------------------------------------------- #
-    # sorted_conditions = list(conditions)
-    # sorted_conditions.sort()
-    # --------------------------------------------- #
-
-    # --------------------------------------------- #
-    # Sort alphabetically, except group the growth
-    # conditions time-sequentially to preserve
-    # temporal patterns
-    # --------------------------------------------- #
-    sorted_conditions = []
-    for species in species_list:
-        temp_condition_list = []
-        for condition in conditions:
-            if species in condition:
-                temp_condition_list.append(condition)
-
-        # contains_growth_condition = True
-        # while contains_growth_condition:
-        for condition in temp_condition_list:
-            if 'DS/LOG' in condition:
-                sorted_conditions.append(condition)
-                temp_condition_list.remove(condition)
-        for condition in temp_condition_list:
-            if 'ELL/LOG' in condition:
-                sorted_conditions.append(condition)
-                temp_condition_list.remove(condition)
-        for condition in temp_condition_list: 
-            if 'LAG/LOG' in condition:
-                sorted_conditions.append(condition)
-                temp_condition_list.remove(condition)
-        for condition in temp_condition_list:
-            if 'LL/LOG' in condition:
-                sorted_conditions.append(condition)
-                temp_condition_list.remove(condition)
-        for condition in temp_condition_list:
-            if 'LPS/LOG' in condition:
-                sorted_conditions.append(condition)
-                temp_condition_list.remove(condition)
-        for condition in temp_condition_list:
-            if 'PLAT/LOG' in condition:
-                sorted_conditions.append(condition)
-                temp_condition_list.remove(condition)
-        for condition in temp_condition_list:
-            if 'PS/LOG' in condition:
-                sorted_conditions.append(condition)
-                temp_condition_list.remove(condition)
-
-        temp_condition_list.sort()
-        sorted_conditions = sorted_conditions + temp_condition_list
-
-
-
-    return sorted_conditions
 
 
 
