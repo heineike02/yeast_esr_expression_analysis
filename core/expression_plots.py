@@ -1,4 +1,5 @@
-from core import io_library 
+# from core import io_library 
+import io_library
 import pandas as pd
 import numpy as np
 import seaborn as sns
@@ -29,6 +30,7 @@ def promoter_choice_plot(mean_gene_expression, condition_arrays, pct_expression,
     
     #convert percentile to number of items
     Ngenes = condition_arrays.index.size
+
     
     expression_indices = [int(np.ceil(Ngenes*(1-percentile))) for percentile in pct_expression]
     stability_indices = [int(np.ceil(Ngenes*(1-percentile))) for percentile in pct_stability]
