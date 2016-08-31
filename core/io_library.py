@@ -6,8 +6,8 @@ import re
 
 #data_dir is a global variable where all data files are stored. 
 # Gabe 7/12/16
-# data_dir = os.path.normpath("C:\Users\Ben\Documents\GitHub\expression_broad_data\microarray_data")		
-data_dir = os.path.normpath(os.path.dirname(os.getcwd()) + '/scripts/expression_broad_data_datafiles/microarray_data/')
+data_dir = os.path.normpath("C:\Users\Ben\Documents\GitHub\expression_broad_data\microarray_data")		
+#data_dir = os.path.normpath(os.path.dirname(os.getcwd()) + '/scripts/expression_broad_data_datafiles/microarray_data/')
 
 def tryfloatconvert(value, default):
     try:
@@ -291,3 +291,112 @@ def read_orth_lookup_table(species1, species2):
             orth_lookup[linesp[0]]= linesp[1:]
 
     return orth_lookup  
+    
+def get_gasch_ESR_list(act_rep):
+    #For a file from the Gasch 2000 supplement, read in the data
+    fname = os.path.normpath(data_dir + "/gasch_data/gasch_fig3_" + act_rep + "_ESR.txt")
+    
+    with open(fname) as f:
+        out = []
+        #Skips first two lines
+        next(f)
+        next(f)
+        for line in f:
+            linesp = line.split()
+            out.append(linesp[0])
+
+    return out
+    
+def read_gasch_data(conditions):
+    #For selected conditions from the Gasch 2000 supplement, extract the data as 
+    #a dataframe with a row for each gene and each column a condition
+    fname = os.path.normpath(data_dir + "/gasch_data/gasch_fig1_all_conditions.txt")
+    
+    with open(fname) as f:
+        header = next(f).split("\t")
+        condition_inds = [header.index(condition) for condition in conditions]
+        #Skips first two lines
+        next(f)
+        exp_data = []
+        gene_names = []
+        for line in f:
+            exp_values = line.split("\t")
+            exp_data.append([tryfloatconvert(exp_values[condition_ind],None) for condition_ind in condition_inds])
+            gene_names.append(exp_values[1])
+        exp_df = pd.DataFrame(data=exp_data, index=gene_names, columns=conditions) 
+    
+    return exp_df
+
+def parse_data_osheaNMPP1(desired_conditions): 
+    #load raw data for NMPP1 experiments from Oshea Paper
+    
+    #Extract dictionary for each gene from family.soft file
+    oshea_pka_dir = 'C:\Users\Ben\Documents\GitHub\expression_broad_data\microarray_data\GSE32703_NMPP1_SC'
+    soft_fname = os.path.normpath(oshea_pka_dir + '/GSE32703_family.soft')
+    with open(soft_fname) as f:
+        for line in f: 
+            if line.split()[0] == '!platform_table_begin':
+                break
+            
+        #Find index of header that will identify orf
+        line = f.next()
+        linesp = line.split()
+        orf_header_ind = linesp.index('ORF')
+        #skip first three lines to get to data
+        f.next()
+        f.next()
+        f.next()
+        #data_dict = {}
+        platform_dict = {}
+        for line in f: 
+            linesp = line.split('\t')
+            if linesp[0] == "!platform_table_end\n":
+                #include new line because this splits on tab.  
+                break 
+            
+            if linesp[0][0:6] == 'A_06_P':
+                orf_ind = linesp[0]
+                orf_name = linesp[orf_header_ind]
+                platform_dict[orf_ind] = orf_name  
+        
+    
+    
+    #Find line that starts table listing gene names and index numbers
+    
+    soft_fname = os.path.normpath(oshea_pka_dir + '/GSE32703_series_matrix.txt')
+    #GSM812516: No NMPP1 0min
+    #GSM812520: 40 min: 3uM 1-NMPP1
+    #Want the ratio of 40min to 0min
+
+    with open(soft_fname) as f:
+        for line in f: 
+            if line.split('\t')[0] == '!series_matrix_table_begin\n':
+                break
+        
+        exp_line = f.next()
+        exp_list = [item.strip('"') for item in exp_line.split()]
+        
+        #extract data for only the listed conditions
+        
+        desired_arrays = [condition[1] for condition in desired_conditions]
+        array_inds = [exp_list.index(array) for array in desired_arrays]
+        
+        orf_list = []
+        exp_value_list = []
+        
+        for line in f:
+            linesp = line.split('\t') 
+            if linesp[0] == '!series_matrix_table_end\n':
+                break       
+            
+            if linesp[0].strip('"')[0:6] == 'A_06_P':
+                orf_ind = linesp[0].strip('"')
+                orf = platform_dict[orf_ind]
+                orf_list.append(orf)
+                exp_values = [float(linesp[array_ind]) for array_ind in array_inds]
+                exp_value_list.append(exp_values)
+                
+    #Make dataframe with orf values as index. 
+    data = pd.DataFrame(exp_value_list, index = orf_list, columns = [condition[0] for condition in desired_conditions])
+    
+    return data

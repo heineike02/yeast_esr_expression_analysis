@@ -152,6 +152,37 @@ def remove_duplicate_orfs(native_orfs, SC_genenames):
     for ind in remove_ind:
         SC_genenames.pop(ind)
         native_orfs.pop(ind)
-    
+        
     return native_orfs, SC_genenames
     
+def ROC_plot(single_expression_dataset, target_gene_set , threshold_type, quantile_range, ax , plot_params):
+    #dataset is a series with heading as the name of the condition and fold change values for each orf. 
+    #
+    #threshold type is either 'activated' or 'repressed'
+    #
+    #quantile_range is a numpy array that indicates which points will be used in the ROC plot. 'activated'
+    #quantiles are typically between 0.5 and 1 and 'repressed' quantiles are between 0 and 0.5.
+    #Example activated quantile_range: quantile_range = np.linspace(0.45,0.995,num =  100)
+    #Example repressed quantile_range: quantile_range = np.linspace(0.005,0.55,num =  100)
+    #
+    #plot_params is a set of arguments that determines various properties of the plot
+    #eg: plot_params = {'color':'b', 'linewidth': 1.5}
+    
+    N_genes_total = len(single_expression_dataset.index)
+    N_true = len(set(target_gene_set))
+    N_false = N_genes_total-N_true
+    FPR = []
+    TPR = []
+    for quantile in quantile_range: 
+        if threshold_type == 'activated':
+            classified_genes = set(single_expression_dataset[single_expression_dataset > single_expression_dataset.quantile(quantile)].index)
+        elif threshold_type =='repressed':
+            classified_genes = set(single_expression_dataset[single_expression_dataset < single_expression_dataset.quantile(quantile)].index)
+        FPR.append(float(len(classified_genes - set(target_gene_set)))/float(N_false))
+        TPR.append(float(len(classified_genes & set(target_gene_set)))/float(N_true))        
+    
+    ax.plot(FPR,TPR, **plot_params)
+    ax.set_xlabel('False Positive Rate', fontsize = 14)
+    ax.set_ylabel('True Positive Rate', fontsize = 14)
+
+    return TPR, FPR
