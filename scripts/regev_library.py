@@ -3,7 +3,6 @@
 # pyplot without setting the mpl backend first
 import matplotlib as mpl
 mpl.use('Qt4Agg') # Need this (at least on Mac OSX to get window to display properly)
-
 import os
 base_dir = os.path.normpath(os.path.dirname(os.getcwd()))
 import sys
@@ -16,47 +15,39 @@ import pandas as pd
 import matplotlib.pyplot as plt 
 import seaborn as sns
 import math
+import params
+from matplotlib import gridspec
+import csv
 # import seaborn as sns
 
-
 # --------------------------------------------------------------------------------- #
 
 # --------------------------------------------------------------------------------- #
-
-
-# Parameters for choosing up and down regulated genes in S.Cer pka inhibition
-POSITIVE_LOG_CUTOFF = 6.5
-NEGATIVE_LOG_CUTOFF = -6.0
-
-
-# Create ortholog lookup tables for each species
-# species_list = ['Kluyveromyces lactis', 'Saccharomyces castellii', 
-                 # 'Candida glabrata', 'Saccharomyces bayanus', 'Saccharomyces cerevisiae']
-
-
-species_list = ['Saccharomyces cerevisiae', 'Saccharomyces bayanus', 
-				'Candida glabrata', 'Saccharomyces castellii',
-				'Kluyveromyces lactis']
-
-# species_list = ['Candida glabrata']
-# Refernce dictionary for creating file names
-species_name_dict = {'Saccharomyces cerevisiae' : 'SCer',
-                    'Kluyveromyces lactis': 'KLac', 
-                    'Candida glabrata' : 'CGla', 
-                    'Saccharomyces castellii' : 'SCas', 
-                    'Saccharomyces bayanus' : 'SBay'}
-
-
-species_abb_dict = { 'SCer' : 'Saccharomyces cerevisiae',
-                     'KLac' : 'Kluyveromyces lactis', 
-                     'CGla' : 'Candida glabrata', 
-                     'SCas' : 'Saccharomyces castellii', 
-                     'SBay' : 'Saccharomyces bayanus'}
+# Import the species_list, dict, and abb_dict from params file
+species_list = params.species_list
+species_name_dict = params.species_name_dict
+species_abb_dict = params.species_abb_dict
 # --------------------------------------------------------------------------------- #
 
 # --------------------------------------------------------------------------------- #
-
 def collapse_values_list(values_list):
+    """
+    Given a list of value-lists, returns three lists
+    respsectively containing the average, max, and min
+    values of the input lists
+
+    Args:
+        values_list: A list of lists. Lists must be of 
+                     same size and type
+
+    Returns:
+        values_avg: A list of element-wise averages of the
+                    input lists
+        values_max: A list of element-wise maximums of the
+                    input lists
+        values_min: A list of element-wise mimimums of the
+                    input lists
+    """
 
     values_max = np.zeros(len(values_list[0]))
     values_min = np.zeros(len(values_list[0]))
@@ -76,13 +67,28 @@ def collapse_values_list(values_list):
 
     return values_avg, values_max, values_min
 
-
-
 # --------------------------------------------------------------------------------- #
 
 # --------------------------------------------------------------------------------- #
 
 def sort_conditions(conditions, mode = 'all'):
+    """
+    Takes a lists of conditions and returns a
+    list sorted primarily by species (according
+    to the species list) and secondarily by 
+    condition within species
+
+    Args:
+        conditions: A list of conditions to sort
+
+    Returns:
+        sorted_conditions: A sorted list of conditions
+
+    Keywords:
+        mode: set to 'all' by default which will 
+              sort all conditions. If anything else,
+              will return an empty list
+    """
 
     # --------------------------------------------- #
     # Standard alphabetical sort
@@ -104,22 +110,15 @@ def sort_conditions(conditions, mode = 'all'):
     else:
         iter_list = ['']
 
-    # for species in species_list:
     for species in iter_list:
         temp_condition_list = []
         for condition in conditions:
             if species in condition:
                 temp_condition_list.append(condition)
 
-    # for condition in conditions:
-        # if ':' not in conditions:
-
-
-        # print ';lkaja;lskdjfa;lksdjfa;lksdjfa;lksdfjal;sdkjfal;ksdjfal;kjsdf;lkajsd;fkljas;dlfja;lsdkfj'
-        # temp_condition_list = list(conditions)
-
-        # contains_growth_condition = True
-        # while contains_growth_condition:
+        # Have to impose order on the conditions
+        # within species. Hard coded the growth
+        # conditions and susan/oshea conditions
         for condition in temp_condition_list:
             if 'susan' in condition:
                 sorted_conditions.append(condition)
@@ -175,20 +174,42 @@ def sort_conditions(conditions, mode = 'all'):
         sorted_conditions = sorted_conditions + temp_condition_list
 
 
-
     return sorted_conditions
-
-
-
-
-
 # --------------------------------------------------------------------------------- #
 
 # --------------------------------------------------------------------------------- #
-
-
 def compile_total_data():
+    """
+    Compiles and merges the regev and susan datasets and stores the result in a 
+    data structure to be saved in 'stored_data' folder. Can be modified in the 
+    future to incorporate more datasets. If the total_data structure has been 
+    created before and saved as 'total_data.npy' in the 'stored_data' folder,
+    this method will simply access and return the stored data structure for 
+    the sake of runtime. If running into bugs, can try deleting the stored
+    total_data.npy file to recompile the structure.
 
+    Args: 
+        None 
+
+    Returns:
+        total_data: The data structure containing all the stored data in a 
+                    accesible format
+        condition_list: The list of all conditions in the total_data structure   
+    """
+    cwd = os.getcwd()
+
+    if os.path.exists(cwd + '/stored_data/total_data/total_data.npy'):
+        print '----------------------------------------------------'
+        print 'LOADING TOTAL DATA FROM FILE'
+        print '----------------------------------------------------'
+        total_data = np.load(cwd + '/stored_data/total_data/total_data.npy')[()]
+        condition_list = np.load(cwd + '/stored_data/total_data/condition_list.npy')[()]
+
+        return total_data, condition_list
+
+    print '----------------------------------------------------'
+    print 'CREATING TOTAL DATA'
+    print '----------------------------------------------------'
     total_data = {}
     condition_list = []
 
@@ -228,7 +249,6 @@ def compile_total_data():
             condition_list.append(condition_key)
             total_data[species][condition]['Values'] = condition_arrays[condition].values.tolist()
             total_data[species][condition]['Genes'] = condition_arrays[condition].index.get_level_values('orf_name').values.tolist()
-
 
     # --------------------------------------------------------------- #
     #   # Add Susan's Data #
@@ -306,7 +326,7 @@ def compile_total_data():
 
         # for condition in total_data[species]:
         for condition in sort_conditions(total_data[species], mode = 'subset'):
-            print condition
+            # print condition
             # Get the avg, min, and max values for Regev's data
             if 'LOG' in condition:
                 test_name_current = 'Depletion'
@@ -319,7 +339,7 @@ def compile_total_data():
             if test_name_prev == test_name_current:
                 temp_values_list.append(total_data[species][condition]['Values'])
             else: 
-                print species + ':' + test_name_prev
+                # print species + ':' + test_name_prev
 
                 if len(temp_values_list) > 1:
                     values_avg, values_max, values_min = collapse_values_list(temp_values_list)
@@ -353,13 +373,41 @@ def compile_total_data():
     # ----------------------------------------------------------------------------------------------------------------
 
 
+    # Create a gene-value mapping
+    for species in total_data:
+        for condition in total_data[species]:
+            total_data[species][condition]['Gene Map'] = {}
+            total_data[species][condition]['Tuples'] = []
+            for index, gene in enumerate(total_data[species][condition]['Genes']):
+                total_data[species][condition]['Gene Map'][gene] = total_data[species][condition]['Values'][index]
+                total_data[species][condition]['Tuples'].append((gene, total_data[species][condition]['Values'][index]))
+
+    # Store the total_data structure and associated condition_list for future use
+    if not os.path.exists(cwd + '/stored_data/total_data'):
+        os.mkdir('./stored_data/total_data')
+    np.save(cwd + '/stored_data/total_data/total_data', total_data)
+    np.save(cwd + '/stored_data/total_data/condition_list', condition_list)
+
     return total_data, condition_list
 # --------------------------------------------------------------------------------- #
 
 # --------------------------------------------------------------------------------- #
 
-
 def data_by_key(condition_key, total_data):
+    """
+    Given a condition key and total_data structure. Returns the data corresponding
+    to the condition key.
+
+    Args: 
+        condition_key: The condition key corresponding to the desired data of 
+                       interest.
+        total_data: A total_data structure
+
+    Returns:
+        total_data[species][condition]: The data correpsonding to the condition
+                                        key where the species and condition are 
+                                        specified by the key.
+    """
     species = condition_key.split(':')[0]
     condition = condition_key.split(':')[1]
     return total_data[species][condition]
@@ -370,7 +418,30 @@ def data_by_key(condition_key, total_data):
 # --------------------------------------------------------------------------------- #
 
 def get_seed_data(activated_number, repressed_number, gene_list, total_data, condition_key, mode = 'top'):
-    # Mode can be 'top', 'all', or 'name'
+    """
+    Get the seed data from the total_data struct corresponding to a condition key. Will return the 
+    data corresponding to the top activated_number and repressed_number of genes respsectively in the
+    target condition or the data corresponding to the expression values of the specified genes in gene_list
+    depending on the mode. 
+
+    Args: 
+        activated_number: The number of activated genes to put into the seed data (can be 0)
+        repressed_number: The number of repressed genes to put into the seed data (can be 0)
+        gene_list: For use in 'name' mode. List of genes to grab data for (rather than top 
+                   activated or repressed)
+        total_data: total_data struct to search through for data. 
+        condition_key: The condition from which to grab the seed data
+
+    Returns:
+        seed_data: The data corresponding to the target genes in the target condition
+
+    Keywords:
+        mode: If 'top', then will grab seed data corresponding to the top activated and repressed
+              genes as determined by the respective args. If 'name' then will ignore the activated_number
+              and repressed_number args and instead grab data corresponding to the genes in gene_list. 
+              'all' option was included to simply grab all the data from the target condition, however, 
+              this mode does not seem to be working correctly right now...
+    """
     high_genes = []
     low_genes = []
     high_values = []
@@ -396,15 +467,23 @@ def get_seed_data(activated_number, repressed_number, gene_list, total_data, con
     high_data = data_frame_high.values.tolist()[0:activated_index]
     low_data = data_frame_low.values.tolist()[0:repressed_index]
 
-    for data_pair in high_data:
-        if mode != 'name' or data_pair[0] in gene_list:
+    if mode == 'name':
+        for gene in gene_list:
+            for search_gene, value in high_data:
+                if gene == search_gene:
+                    high_genes.append(search_gene)
+                    high_values.append(value)
+                    gene_value_map[search_gene] = value
+                    value_gene_map[value] = search_gene
+
+    else:
+        for data_pair in high_data:
             high_genes.append(data_pair[0])
             high_values.append(data_pair[1])
             gene_value_map[data_pair[0]] = data_pair[1]
             value_gene_map[data_pair[1]] = data_pair[0]
 
-    for data_pair in low_data:
-        if mode != 'name' or data_pair[0] in gene_list:
+        for data_pair in low_data:
             low_genes.append(data_pair[0])
             low_values.append(data_pair[1])
             gene_value_map[data_pair[0]] = data_pair[1]
@@ -414,7 +493,7 @@ def get_seed_data(activated_number, repressed_number, gene_list, total_data, con
     values = high_values + low_values
 
 
-    if get_species(condition_key) == 'Saccharomyces cerevisiae':
+    if params.get_species(condition_key) == 'Saccharomyces cerevisiae':
         ORF_gene_table, gene_ORF_table = io_library.read_SGD_features()
         for gene in genes:
             if gene in ORF_gene_table:
@@ -428,13 +507,14 @@ def get_seed_data(activated_number, repressed_number, gene_list, total_data, con
             ORF_map[gene] = gene
             ORFs.append(gene)
 
+    # We have various mappings here for quickly accesing data
     seed_data = {}
     seed_data['Genes'] = genes
     seed_data['Values'] = values
     seed_data['High Genes'] = high_genes
     seed_data['Low Genes'] = low_genes
-    seed_data['High Values'] = high_values
-    seed_data['Low Values'] = low_values
+    # seed_data['High Values'] = high_values
+    # seed_data['Low Values'] = low_values
     seed_data['Condition Key'] = condition_key
     seed_data['Gene Map'] = gene_value_map
     seed_data['Value Map'] = value_gene_map
@@ -445,41 +525,52 @@ def get_seed_data(activated_number, repressed_number, gene_list, total_data, con
 # --------------------------------------------------------------------------------- #
 
 # --------------------------------------------------------------------------------- #
+def create_cross_data(seed_data, total_data, condition_list, selection = 'all'):
+    """
+    Given a total_data struct and seed data, generate the cross-species data. The cross_data
+    contains all the relevant ortholog data across species corresponding to the data from seed 
+    data 
 
-def create_condition_key(species_arg, condition):
-    species = ''
-    if species_arg in species_abb_dict:
-        species = species_abb_dict[species_arg]
-    elif species in species_list:
-        species = species_arg
-    else:
-        raise KeyError('Invalid Species Name : ' + species_arg)
+    Args: 
+        seed_data: The seed data whose genes determines the ortholog data to be included in cross_data
+        total_data: total_data struct to search through for data. 
+        condition_list: The list of all conditions in the total_data structure
 
-    condition_key = species + ':' + condition
+    Returns:
+        cross_data: A data struct with similar structure to total_data but contains only the
+                    relevant ortholog data corresponding to the genes in seed_data
+         
 
-    return condition_key
-
-# --------------------------------------------------------------------------------- #
-
-# --------------------------------------------------------------------------------- #
-def get_species(condition_key):
-    return condition_key.split(':')[0]
-
-def get_condition(condition_key):
-    return condition_key.split(':')[1]
-# --------------------------------------------------------------------------------- #
-
-# --------------------------------------------------------------------------------- #
-
-def create_cross_data(seed_data, total_data, condition_list):
+    Keywords:
+        selection: This is a currently deprecated keyword. I wanted to include the possibility 
+                   of changing the selection of data to include at this level, but found that
+                   it was probably redundant. Most of the selection should be happening at the 
+                   seed data creation level. If you want to modfy this in this function you should
+                   start by looking at the gene_selector and values_selector assignment that's 
+                   commented out.
+    """
 
     cross_data = {}
 
-    seed_genes = seed_data['Genes']
+    # if selection == 'all':
+    #     gene_selector = 'Genes'
+    #     values_selector = 'Values'
+    # elif selection == 'low':
+    #     gene_selector = 'Low Genes'
+    #     values_selector = 'Low Values'
+    # elif selection == 'high':
+    #     gene_selector = 'High Genes'
+    #     values_selector = 'High Values'
+    gene_selector = 'Genes'
+    values_selector = 'Values'
+
+    # seed_genes = seed_data['Genes']
+    seed_genes = seed_data[gene_selector]
     seed_genes_ORFs = seed_data['ORFs']
-    seed_values = seed_data['Values']
+    # seed_values = seed_data['Values']
+    seed_values = seed_data[values_selector]
     seed_condition = seed_data['Condition Key']
-    seed_species = get_species(seed_condition)
+    seed_species = params.get_species(seed_condition)
 
     for condition in condition_list:
         if condition != seed_condition:
@@ -491,7 +582,7 @@ def create_cross_data(seed_data, total_data, condition_list):
             cross_data[condition]['Seed Gene Map'] = {}
 
             
-            current_species = get_species(condition)
+            current_species = params.get_species(condition)
             if seed_species != current_species:
                 orth_table = io_library.read_orth_lookup_table(seed_species, current_species)
                 
@@ -519,8 +610,8 @@ def create_cross_data(seed_data, total_data, condition_list):
 
 
     for condition in cross_data:
-        search_species = get_species(condition)
-        search_condition = get_condition(condition)
+        search_species = params.get_species(condition)
+        search_condition = params.get_condition(condition)
         
         # if search_species != seed_species:
         for search_gene in cross_data[condition]['Genes']:
@@ -554,19 +645,58 @@ def create_cross_data(seed_data, total_data, condition_list):
 
 # --------------------------------------------------------------------------------- #
 
-def create_plotting_data(seed_data, cross_data):
+def create_plotting_data(seed_data, cross_data, selection = 'all'):
+    """
+    Given seed data and cross data, create a plotting data structure for use
+    in plotting
+
+    Args: 
+        seed_data: The seed data used in creating the cross data
+        cross_data: The cross data struct generated by seed_data
+
+    Returns:
+        plotting_data: A numpy matrix with the relevant plotting data. Seed data is the
+                       left-most column, and the corresponding cross-species data is laid
+                       out across the matrix from left to right.
+        plotting_labels_x: The plotting labels corresponding to the cross-species data conditions.
+        plotting_labels_y: The plotting labels corresponding to the seed data gene list.
+         
+
+    Keywords:
+        selection: Similar to the create_cross_data function, this is a currently deprecated 
+                   keyword. I wanted to include the possibility of changing the selection of 
+                   data to include at this level, but found that it was probably redundant. 
+                   Most of the selection should be happening at the seed data creation level. 
+                   If you want to modfy this in this function you should start by looking at 
+                   the gene_selector and values_selector assignment that's commented out.
+    """
 
     repeats = {}
     plotting_columns = []
     plotting_labels_x = []
+
+
+    # if selection == 'all':
+    #     gene_selector = 'Genes'
+    #     values_selector = 'Values'
+    # elif selection == 'low':
+    #     gene_selector = 'Low Genes'
+    #     values_selector = 'Low Values'
+    # elif selection == 'high':
+    #     gene_selector = 'High Genes'
+    #     values_selector = 'High Values'
+    gene_selector = 'Genes'
+    values_selector = 'Values'
 
     seed_genes = seed_data['ORFs']
 
     for seed_gene in seed_genes:
         repeats[seed_gene] = 1
 
-    plotting_seed_values = seed_data['Values']
-    plotting_labels_y = seed_data['Genes']
+    # plotting_seed_values = seed_data['Values']
+    plotting_seed_values = seed_data[values_selector]
+    # plotting_labels_y = seed_data['Genes']
+    plotting_labels_y = seed_data[gene_selector]
 
     num_columns = 1
     for condition in cross_data:
@@ -592,7 +722,7 @@ def create_plotting_data(seed_data, cross_data):
         ORF_gene_table, gene_ORF_table = io_library.read_SGD_features()
         for seed_gene in seed_data['Genes']:
             if seed_gene != ' ':
-                if type(gene_ORF_table[seed_gene]) != type(1.0) and seed_gene in gene_ORF_table:
+                if seed_gene in gene_ORF_table and type(gene_ORF_table[seed_gene]) != type(1.0): 
                     plotting_labels_y.append(gene_ORF_table[seed_gene])
                 else:
                     plotting_labels_y.append(seed_gene)
@@ -635,6 +765,17 @@ def create_plotting_data(seed_data, cross_data):
 # --------------------------------------------------------------------------------- #
 
 def condense_labels(labels):
+    """
+    An auxillary function for use in plotting. Takes a list of condition labels 
+    (plotting labels x) and makes them shorter by including a condensed species 
+    name only at the labels where the species changes. 
+
+    Args: 
+        labels: List of condition labels (plotting labels x)
+
+    Returns:
+        labels: List of shortened labels
+    """
 
 
     # labels[0] = ' '
@@ -673,7 +814,19 @@ def condense_labels(labels):
 # --------------------------------------------------------------------------------- #
 
 def plot_data(seed_data, plotting_data, plotting_labels_x, plotting_labels_y):
+    """
+    Given seed data, plotting data, and corresponding labels, plots a heatmap 
+    of gene expression changes.
 
+    Args: 
+        seed_data: The seed data that generated the plotting data
+        plotting_data: Plotting data matrix created using create_plotting_data
+        plotting_labels_x: X labels generated from create_plotting_data
+        plotting_labels_y: Y labels generated from create_plotting_data
+
+    Returns:
+        None
+    """
 
     species_label_indices = np.ones(len(species_list))
     species_label_indices *= float('nan')
@@ -711,30 +864,189 @@ def plot_data(seed_data, plotting_data, plotting_labels_x, plotting_labels_y):
 
     newax.set_xticklabels(species_labels)
     newax.set_xticks(species_label_indices)
-    title = plt.title('Seed Condition ' + seed_data['Condition Key'])
-    title.set_y(1.05)
+    # title = plt.title('Seed Condition ' + seed_data['Condition Key'])
+    # title.set_y(1.05)
     plt.subplots_adjust(top=0.86)
     # title = 'Seed Condition ' + seed_data['Condition Key']
     # plt.text(0.5, 2, title, horizontalalignment = 'center', fontsize = 12)
+
+    # ----------------------------------------------------------------------
+    for item in ([ax.title, ax.xaxis.label, ax.yaxis.label] +
+                ax.get_xticklabels() + ax.get_yticklabels()):
+                # ax.get_yticklabels()):
+        item.set_fontsize(12)
+    for item in ([newax.title, newax.xaxis.label, newax.yaxis.label] +
+                 newax.get_xticklabels() + newax.get_yticklabels()):
+        item.set_fontsize(16)
+    # ----------------------------------------------------------------------
+
     plt.tight_layout()
     plt.get_current_fig_manager().window.raise_()
     plt.show()
 
 
 # --------------------------------------------------------------------------------- #
-# #### MAIN ##### (for testing)
+
 # --------------------------------------------------------------------------------- #
+def plot_data_TF(seed_data, cluster_matrix, TF_matrix, plotting_labels_x, plotting_labels_y, TF_labels):
+    """
+    Similar to plot_data function above. This one was created more quickly and contains a lot of 
+    repeated code from the function above. This creates the TF/Heatmap plot given both a TF_matrix
+    and cluster_matrix as well as the seed data and plotting labels.
 
-total_data, condition_list = compile_total_data()
-condition_key = create_condition_key('SCer', 'susan')
-# condition_key = create_condition_key('KLac', 'NaCl_max')
 
-seed_gene_list = []
-seed_data = get_seed_data(10, 10, seed_gene_list, total_data, condition_key)
+    Args: 
+        seed_data: The seed data used to generate the cluster matrix
+        cluster_matrix: The clustered heatmap matrix (I did not get around to writing a function to 
+                        create this, but an example is in cross_species_GO)
+        TF_matrix: The TF matrix (I did not get around to writing a function to 
+                        create this, but an example is in cross_species_GO)
+        plotting_labels_x: Y labels (condition list)
+        plotting_labels_y: X labels (seed data gene list)
+        TF_labels: TF names
 
-cross_data = create_cross_data(seed_data, total_data, condition_list)
-plotting_data, plotting_labels_x, plotting_labels_y = create_plotting_data(seed_data, cross_data)
-plot_data(seed_data, plotting_data, plotting_labels_x, plotting_labels_y)
+    Returns:
+        None
+    """
+
+    species_label_indices = np.ones(len(species_list))
+    species_label_indices *= float('nan')
+    # plotting_data_search = plotting_data[ : , 1: ]
+
+    for species_index, species in enumerate(species_list):
+        for condition_index, condition in enumerate(plotting_labels_x):
+            if species in condition:
+                species_label_indices[species_index] = condition_index + 1
+                break
+
+
+    plotting_labels_x = condense_labels(plotting_labels_x)
+
+
+
+
+    num_columns = len(plotting_labels_x)
+    cmap_cluster = mpl.cm.RdBu_r
+    cmap_cluster.set_bad('k',1.0)
+    # Greys : Black means present (1), white means missing (0). gray : Black means missing (0), white means present (1)
+    cmap_TF = mpl.cm.Greys
+    fig, ax = plt.subplots(1,2)
+    gs = gridspec.GridSpec(1, 2, width_ratios=[1, 1])
+    # gs.update(hspace = 0.025)
+    ax0 = plt.subplot(gs[0])
+    ax1 = plt.subplot(gs[1])
+    # ax2 = plt.subplot(gs[2])
+    sns.heatmap(cluster_matrix, cmap = cmap_cluster, ax = ax0, yticklabels = plotting_labels_y, xticklabels = plotting_labels_x, cbar = False) #cbar_ax = ax0)
+    sns.heatmap(TF_matrix, cmap = cmap_TF, ax = ax1, yticklabels = plotting_labels_y, xticklabels = TF_labels, cbar = False, linewidths = 0.3)
+    # ylocs, ylabels = plt.yticks()
+    # plt.setp(ylabels, rotation = 0)
+    # xlocs, xlabels = plt.xticks()
+    # plt.setp(xlabels, rotation = 90)
+    plt.setp(ax0.xaxis.get_majorticklabels(), rotation=90)
+    plt.setp(ax1.xaxis.get_majorticklabels(), rotation=0)
+    ax1.xaxis.tick_top()
+    ax1.xaxis.set_label_position('top')
+    species_labels = []
+    for species in species_list:
+        species_labels.append(species_name_dict[species])
+    newax = ax0.twiny()
+    for i in range(len(species_label_indices)):
+        species_label_indices[i] = species_label_indices[i] / float(num_columns)
+        # if i > 0:
+        species_label_indices[i] -= 1 / float(num_columns)
+
+    newax.set_xticklabels(species_labels)
+    newax.set_xticks(species_label_indices)
+    # title = plt.title('Seed Condition ' + seed_data['Condition Key'])
+    # title.set_y(1.05)
+    plt.subplots_adjust(top=0.86, wspace = 0)
+    # title = 'Seed Condition ' + seed_data['Condition Key']
+    # plt.text(0.5, 2, title, horizontalalignment = 'center', fontsize = 12)
+
+
+    # ----------------------------------------------------------------------
+    for item in ([ax0.xaxis.label, ax0.yaxis.label] +
+                ax0.get_xticklabels() + ax0.get_yticklabels()):
+                # ax.get_yticklabels()):
+        item.set_fontsize(12)
+    for item in ([ax1.xaxis.label, ax1.yaxis.label] +
+                ax1.get_xticklabels() + ax1.get_yticklabels()):
+                # ax.get_yticklabels()):
+        item.set_fontsize(16)
+    for item in ([newax.title, newax.xaxis.label, newax.yaxis.label] +
+                 newax.get_xticklabels() + newax.get_yticklabels()):
+        item.set_fontsize(16)
+    # ----------------------------------------------------------------------
+
+    plt.tight_layout()
+    gs.update(hspace = 0.025, wspace = 0.025)
+    plt.get_current_fig_manager().window.raise_()
+    plt.show()
+
+
+
+# ------------------------------------------------------------------------------------------------------------------------------------------------------
+# 
+#  I was using the code below to create plots directly in this library. It's probably better practice to import this library and use the functions
+#  to create plot and manage data elsewhere. I kept the lines in below though for reference, there's a lot of reusable material there. 
+# 
+# ------------------------------------------------------------------------------------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------------- #
+# #### MAIN ##### (for testing and plotting)
+# --------------------------------------------------------------------------------- #
+# cwd = os.getcwd()
+# # fname = os.path.normpath(cwd+'/stored_data/text_data/klac_no_orth.txt')
+# fname = os.path.normpath(cwd+'/stored_data/text_data/Klac_low_genes.txt')
+# gene_list = []
+# csvfile = open(fname, 'rb')
+# reader = csv.reader(csvfile, delimiter = '\n')
+# for row in reader:
+#     gene = row[0]
+#     gene_list.append(gene)
+
+
+
+
+
+
+# total_data, condition_list = compile_total_data()
+
+# condition_list_klac = []
+# for condition in condition_list:
+#     if params.get_species(condition) == 'Kluyveromyces lactis' or params.get_species(condition) == 'Saccharomyces cerevisiae':
+#         condition_list_klac.append(condition)
+
+# condition_list_scer = []
+# for condition in condition_list:
+#     if params.get_species(condition) == 'Saccharomyces cerevisiae':
+#         condition_list_scer.append(condition)
+
+# condition_key = params.create_condition_key('SCer', 'susan')
+# # # condition_key = create_condition_key('KLac', 'NaCl_max')
+
+# seed_gene_list = []
+# seed_data = get_seed_data(15, 15, gene_list, total_data, condition_key, mode = 'name')
+# # seed_data = get_seed_data(10, 10, gene_list, total_data, condition_key)
+
+# cross_data = create_cross_data(seed_data, total_data, condition_list_klac)
+# plotting_data, plotting_labels_x, plotting_labels_y = create_plotting_data(seed_data, cross_data)
+
+# # ------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+# clustergrid = sns.clustermap(plotting_data, col_cluster = False, metric = 'chebyshev', xticklabels = plotting_labels_x, yticklabels = plotting_labels_y)
+# ax = clustergrid.ax_heatmap
+# new_indices = clustergrid.dendrogram_row.reordered_ind
+# cluster_matrix = np.copy(plotting_data)
+# for row_index in range(len(cluster_matrix[ : , 0])):
+#     cluster_matrix[ row_index , : ] = plotting_data[new_indices[row_index]]
+# # plot_data_TF(seed_data, plotting_data, plotting_data, plotting_labels_x, plotting_labels_y, [' '])
+# plot_data(seed_data, cluster_matrix, plotting_labels_x, plotting_labels_y)
+# # ------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+# plot_data(seed_data, plotting_data, plotting_labels_x, plotting_labels_y)
+
+
+# plt.show()
 
 
 
