@@ -1,0 +1,172 @@
+----------------------------------------------------------------------------------------------------------------
+Gabe Reder
+gkreder@gmail.com
+9/1/16
+----------------------------------------------------------------------------------------------------------------
+
+
+
+TABLE OF CONTENTS
+----------------------------------------------------------------------------------------------------------------
+
+    LIBRARIES - Contains a brief overview of the three libraries
+    SCRIPTS - Refers to the scripts that utilizes library functions to produce results
+    DATA STRUCTURE - Briefly describes the format of the core data structures which are used to 
+                     store and manipulate the relevant data
+
+----------------------------------------------------------------------------------------------------------------
+
+
+
+LIBRARY OF FUNCTIONS
+----------------------------------------------------------------------------------------------------------------
+    There are three libraries of functions that stay relatively constant they are:
+
+            params.py
+            regev_library.py
+            species_score_library.py
+
+    single_score_library.py is also in there, but I largely didn't end up using it since 
+    the scores it produces are not very meaningful. There is one function that I use in there
+    in other scripts so I kept it in the folder. 
+
+
+    params.py - A short file containing some parameters that get referenced throughout the other
+                libraries and scripts. I created this file so that I could just change values in 
+                there once and that would propogate throughout the rest of the scripts and libraries.
+                For example, if you wanted to narrow down your analysis between two species, you should
+                just be able to comment out the existing species_list in params and replace it with a 
+                smaller species_list containing just your two species of interest. 
+
+    regev_library.py - contains the functions that essentially integrate and store the data. The goal of these
+    functions is to have a consitent way of bringing together disparate data sources so that they can be 
+    referenced in the same way in upstream analysis. Also contains plotting functions.
+
+    species_score_library.py - Contains functions relevant to generating and plotting data relating to 
+                               the cross-species scores. 
+
+
+
+    If you want to incorporate more datasets I would start in the regev_library in the compile_total_data
+    function. If you do this cleanly, the new data should get incorporated into total_data in the same way
+    as the other datasets and should integrate more smoothly into the upstream data structures. 
+
+
+
+----------------------------------------------------------------------------------------------------------------
+
+
+
+SCRIPTS
+----------------------------------------------------------------------------------------------------------------
+    The two scripts I left in the main file are 
+
+    cross_species_GO.py
+    parse_TFs.py
+
+
+    There are a bunch of older scripts that I used as well. I thought they weren't great example of using the 
+    library functions and most of them have much less reusable code. Still, there might be some useful stuff in 
+    there. They are in a folder called 'Deprecated Scripts'. 
+
+    cross_species_GO.py - A mix of tasks that I tried running using the library functions. Some were more
+                          succesful than others. I tried to keep them separate and you can see that the 
+                          file ended up having a few seperate tasks in that I would comment/uncomment 
+                          depending on what I wanted to run. Also contains the clustering function
+                          I used from seaborn and how to get the data from that. Uses the species_score_library
+                          functions to get scores and rank them, etc. 
+
+    parse_TFs.py - More of a single workflow. Starts with .csv files from yeastract then parses and plots them. 
+                   Can be added to to make the TFs analysis stronger and the pipeline is already there. Refers
+                   to a lot of text/csv files stored in the 'stored_data/text_data' folder. 
+
+
+
+DATA STRUCTURE
+----------------------------------------------------------------------------------------------------------------
+    Data is mostly stored in dictionaries and has the following formats where the dictionary key levels are ordered
+    from top to bottom 
+
+    --------------
+    Condition Keys
+    --------------
+        Aside from the Total Data structure, data is usually accessed by condition keys to make things a little easier.
+        Condition keys are strings and have the form 
+                                    species:condition_name
+        So for example, susan's data has condition key
+                                    'Saccharomyces cerevisiae:susan'
+        and Oshea's data (from Susan's excel file) has condition key
+                                    'Saccharomyces cerevisiae:oshea'
+
+        The params.py file has a couple of functions for constructing and deconstructing condition keys
+
+    ----------
+    Total Data
+    ----------              
+                        ----------------------------------------------------------------------------------
+                        |                   species_1            |  species_2 | species_3 | ...   |      |
+                        |condition_1 | condition_2 | condition_3 |     ...    |      ...  | ...   | ...  |
+                        |'Values'|'Genes'|'Gene Map'|'Tuples'|   |            |           |       |      |
+                        ----------------------------------------------------------------------------------
+
+
+        So for example, I could access the list of genes in SCer from susan's dataset by looking at
+                        total_data['Saccharomyces cerevisiae']['susan']['Genes']
+
+        Gene map is a mapping of gene names to the logfold change of expression values of those genes. For example
+                        total_data['Saccharomyces cerevisiae']['susan']['Gene Map'][gene_name]
+        gives me the logfold change value of gene_name in SCer in the susan condition
+    
+
+    ---------
+    Seed Data       
+    ---------
+        Seed data is a one-layer deep dictionary with the following keys:
+
+        'Genes' - List of genes
+        'Values' - List of values (ordered according to gene list)
+        'High Genes' - List of activated genes
+        'Low Genes' - List of repressed genes
+        'Condition Key' - Condition Key that created this seed data struct
+        'Gene Map' - Mapping of gene name to values. So for example
+                     seed_data['Gene Map'][gene_name] gives me the values associated with the gene_name gene
+        'Value Map' - Mapping of values to gene naems. So for example
+                      seed_data['Value Map'][value] gives me the genes associated with value
+        'ORF Map' - (For Susan's data) Mapping of gene name to standard ORF name
+        'ORFs' - (For Susan's data) list of standard ORF names of the genes in 'Genes'
+
+    ----------
+    Cross Data
+    ----------
+        Cross data is a two-layer deep dictionary. The first layer is a layer of condition keys. Then for each
+        condition key we have the following keys for cross_data[condition_key]:
+
+        'Genes' - List of genes for the given condition (as determined by the seed list of genes in seed data)
+        'Values' - List of values for the given condition (ordered by list of genes)
+        'Gene Map' - Mapping of gene name to values in the given condition
+        'Value Map' - Mapping of value to gene name in the given condition
+        'Seed Gene Map' - Mapping of seed gene name to ortholog name in the given condition key (and its associated species)
+                          so for example, cross_data[species:condition_name]['Seed Gene Map'][seed_gene_name] will
+                          give me the list of genes in species that are orthologous to seed_gene_name in the seed
+                          species. 
+
+    ----------
+    Score Data
+    ----------
+        Score data (referring to species score data NOT the single score data which hardly gets used) has structure
+        that is a little different. Score Data is a three-layer dictionary. The first layer is all the genes that have
+        scores. The second layer is the species to which those genes belong. The third layer is the 'test' species. 
+        So for example
+
+                            score_data[home_gene_name][home_species][test_species]
+
+        will give me the correlation score that corresponds to the correlation between home_gene_name (which is a
+        gene in the genome of home_species) and test_species. That is the score that measures the correlation of
+        the gene home_gene_name in home_species and its ortholog in test_species. Missing orthologs results in a 
+        score of 0.0. The home_species layer is a little unecessary, but I included it for easy referencing to 
+        the home_species for a given gene. 
+----------------------------------------------------------------------------------------------------------------
+
+
+
+
