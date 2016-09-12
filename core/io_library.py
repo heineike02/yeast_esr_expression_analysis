@@ -281,7 +281,8 @@ def read_orth_lookup_table(species1, species2):
     orth_fname = orth_file_abbrev[species1] + "-" + orth_file_abbrev[species2] + "-orthologs.txt"
     # Gabe 7/12/16
     # orth_fname = os.path.normpath(data_dir + "\ortholog_files\\" + orth_fname)
-    orth_fname = os.path.normpath(data_dir + "/ortholog_files/" + orth_fname)
+    #orth_fname = os.path.normpath(data_dir + "/ortholog_files/" + orth_fname)
+    orth_fname = os.path.normpath(data_dir + "/ortholog_files_YGOB/" + orth_fname)
     
     #There are some orfs that have multiple orthologs - in that case both will be used
     with open(orth_fname) as f:
@@ -400,3 +401,72 @@ def parse_data_osheaNMPP1(desired_conditions):
     data = pd.DataFrame(exp_value_list, index = orf_list, columns = [condition[0] for condition in desired_conditions])
     
     return data
+
+def write_YGOB_orth_lookup_table(species1, species2, base_dir, all_ortholog_file):
+    #for each position in species 1
+    #Assign orthologs or 'NONE' to each column from Position 2 and 3
+    fname = os.path.normpath(base_dir + all_ortholog_file)
+    orth_positions = {'Kluyveromyces lactis': [15], 'Saccharomyces cerevisiae' : [11,21]}
+    #YGOB_Pillars.txt order of species: 
+    #    0    V. polyspora Position 1
+    #    1    T. phaffii Position 1
+    #    2    T. blattae Position 1
+    #    3    N. dairenensis Position 1
+    #    4    N. castellii Position 1
+    #    5    K. naganishii Position 1
+    #    6    K. africana Position 1
+    #    7    C. glabrata Position 1
+    #    8    S. bayanus var. uvarum Position 1
+    #    9    S. kudriavzevii Position 1
+    #    10   S. mikatae Position 1
+    #    11   S. cerevisiae Position 1
+    #    12   Ancestral Gene Order
+    #    13   Z. rouxii
+    #    14   T. delbrueckii
+    #    15   K. lactis
+    #    16   E. gossypii 
+    #    17   E. cymbalariae
+    #    18   L. kluyveri
+    #    19   L. thermotolerans
+    #    20   L. waltii
+    #    21   S. cerevisiae Position 2
+    #    22   S. mikatae Position 2
+    #    23   S. kudriavzevii Position 2
+    #    24   S. bayanus var. uvarum Position 2
+    #    25   C. glabrata Position 2
+    #    26   K. africana Position 2
+    #    27   K. naganishii Position 2
+    #    28   N. castellii Position 2
+    #    29   N. dairenensis Position 2
+    #    30   T. blattae Position 2
+    #    31   T. phaffii Position 2
+    #    32   V. polyspora Position 2
+    
+    species1_columns = orth_positions[species1]
+    species2_columns = orth_positions[species2]
+    
+    with open(fname) as f:
+        orth_lookup = []
+        for line in f:
+            linesp = line.split()
+            for column1 in species1_columns: 
+                if linesp[column1]!= '---':
+                    species1_gene = [linesp[column1]]
+                    species2_genes = []
+                    for column2 in species2_columns: 
+                        if linesp[column2]!='---': 
+                            species2_genes.append(linesp[column2])
+                    if len(species2_genes) == 0:
+                        species2_genes.append('NONE')
+                    orth_lookup.append(species1_gene + species2_genes)
+                    
+    orth_file_abbrev = {'Kluyveromyces lactis': 'Klac', 'Saccharomyces cerevisiae': 'Scer', 'Candida glabrata':'Cgla', 'Saccharomyces castellii' : 'Scas', 'Saccharomyces bayanus' : 'Sbay'}
+    orth_lookup_outputfname = os.path.normpath(base_dir + '\microarray_data\ortholog_files_YGOB\\' + orth_file_abbrev[species1] + "-" + orth_file_abbrev[species2] + "-orthologs.txt"  )
+    orth_lookup_outputfile = open(orth_lookup_outputfname, 'w')
+    
+    for gene in orth_lookup:
+        line = '\t'.join(gene)+'\n'
+        orth_lookup_outputfile.write(line)
+    orth_lookup_outputfile.close()
+    
+    return orth_lookup 
