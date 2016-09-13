@@ -470,3 +470,16 @@ def write_YGOB_orth_lookup_table(species1, species2, base_dir, all_ortholog_file
     orth_lookup_outputfile.close()
     
     return orth_lookup 
+
+def load_YGOB_annotations(species, base_dir, species_tab_file):
+    fname = os.path.normpath(base_dir + species_tab_file)
+    
+    with open(fname) as f:
+        annotation_lookup = {}
+        for line in f:
+            linesp = line.split('\t')
+            gene = linesp[0]
+            annotation = linesp[8]
+            annotation_lookup[gene] = annotation
+    
+    return annotation_lookup
