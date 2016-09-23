@@ -6,7 +6,7 @@ import re
 
 #data_dir is a global variable where all data files are stored. 
 # Gabe 7/12/16
-data_dir = os.path.normpath("C:\Users\Ben\Documents\GitHub\expression_broad_data\microarray_data")		
+data_dir = os.path.normpath("C:\Users\Ben\Documents\GitHub\expression_broad_data\expression_data")		
 #data_dir = os.path.normpath(os.path.dirname(os.getcwd()) + '/scripts/expression_broad_data_datafiles/microarray_data/')
 
 def tryfloatconvert(value, default):
@@ -235,7 +235,7 @@ def make_data_tables(species_list,fname_out_bases, base_dir):
         #save raw expression data to a csv file
         # Gabe 7/12/16
         # fname = os.path.normpath(base_dir + "\microarray_data\\raw_exp\\"  + fname_out_bases[jj] + '_raw_exp.csv')
-        fname = os.path.normpath(base_dir + "/microarray_data/raw_exp/"  + fname_out_bases[jj] + '_raw_exp.csv')
+        fname = os.path.normpath(base_dir + "/expression_data/raw_exp/"  + fname_out_bases[jj] + '_raw_exp.csv')
         raw_exp.to_csv(fname)
         print fname + ' saved'
         
@@ -243,7 +243,7 @@ def make_data_tables(species_list,fname_out_bases, base_dir):
         growth_exp = parse_micro_data(species_list[jj],'Growth',orf_lookup)
         # Gabe 7/12/16
         # fname = os.path.normpath(base_dir + "\microarray_data\\GSE36253_Growth\\"  + fname_out_bases[jj] + '_growth.csv' )
-        fname = os.path.normpath(base_dir + "/microarray_data/GSE36253_Growth/"  + fname_out_bases[jj] + '_growth.csv' )
+        fname = os.path.normpath(base_dir + "/expression_data/GSE36253_Growth/"  + fname_out_bases[jj] + '_growth.csv' )
         growth_exp.to_csv(fname)
         print fname + ' saved'
         
@@ -252,7 +252,7 @@ def make_data_tables(species_list,fname_out_bases, base_dir):
             stress_exp = parse_micro_data(species_list[jj],'Stress',orf_lookup)
             # Gabe 7/12/16
             # fname = os.path.normpath(base_dir + "\microarray_data\\GSE38478_Stress\\"  + fname_out_bases[jj] + '_stress.csv' )
-            fname = os.path.normpath(base_dir + "/microarray_data/GSE38478_Stress/"  + fname_out_bases[jj] + '_stress.csv' )
+            fname = os.path.normpath(base_dir + "/expression_data/GSE38478_Stress/"  + fname_out_bases[jj] + '_stress.csv' )
             stress_exp.to_csv(fname)
             print fname + ' saved'
     
@@ -272,8 +272,9 @@ def read_SGD_features():
     #are presumably left out. 
     SC_orfs_lookup = dict(zip(SC_orfs[4], SC_orfs[3]))
     SC_genename_lookup = dict(zip(SC_orfs[3], SC_orfs[4]))
+    SC_features_lookup = dict(zip(SC_orfs[3], SC_orfs[15]))
        
-    return SC_orfs_lookup, SC_genename_lookup
+    return SC_orfs_lookup, SC_genename_lookup, SC_features_lookup
 
 def read_orth_lookup_table(species1, species2):
     #For a given species read in the ortholog file, make a dictionary
@@ -308,12 +309,17 @@ def get_gasch_ESR_list(act_rep):
 
     return out
     
-def read_gasch_data(conditions):
+def read_gasch_data(conditions,fname):
     #For selected conditions from the Gasch 2000 supplement, extract the data as 
     #a dataframe with a row for each gene and each column a condition
-    fname = os.path.normpath(data_dir + "/gasch_data/gasch_fig1_all_conditions.txt")
     
-    with open(fname) as f:
+    if fname == "gasch_complete_dataset.txt":
+        gene_ind = 0
+    else: 
+        gene_ind = 1
+    fname_full = os.path.normpath(data_dir + "/gasch_data/" + fname)
+    
+    with open(fname_full) as f:
         header = next(f).split("\t")
         condition_inds = [header.index(condition) for condition in conditions]
         #Skips first two lines
@@ -323,84 +329,78 @@ def read_gasch_data(conditions):
         for line in f:
             exp_values = line.split("\t")
             exp_data.append([tryfloatconvert(exp_values[condition_ind],None) for condition_ind in condition_inds])
-            gene_names.append(exp_values[1])
-        exp_df = pd.DataFrame(data=exp_data, index=gene_names, columns=conditions) 
+            gene_names.append(exp_values[gene_ind])
+        
+    
+    exp_df = pd.DataFrame(data=exp_data, index=gene_names, columns=conditions) 
     
     return exp_df
 
-def parse_data_osheaNMPP1(desired_conditions): 
-    #load raw data for NMPP1 experiments from Oshea Paper
-    
+def parse_data_series_matrix_SC(desired_conditions, data_dir, GEO_accession):
+    #Extracts data for desired conditions from a series matrix file for S.Cerevisiae
     #Extract dictionary for each gene from family.soft file
-    oshea_pka_dir = 'C:\Users\Ben\Documents\GitHub\expression_broad_data\microarray_data\GSE32703_NMPP1_SC'
-    soft_fname = os.path.normpath(oshea_pka_dir + '/GSE32703_family.soft')
+    series_fname = GEO_accession + '_series_matrix.txt'
+    soft_fname = os.path.normpath(data_dir + GEO_accession + '_family.soft' )
     with open(soft_fname) as f:
         for line in f: 
             if line.split()[0] == '!platform_table_begin':
                 break
-            
+
         #Find index of header that will identify orf
         line = f.next()
         linesp = line.split()
         orf_header_ind = linesp.index('ORF')
         #skip first three lines to get to data
-        f.next()
-        f.next()
-        f.next()
-        #data_dict = {}
         platform_dict = {}
         for line in f: 
             linesp = line.split('\t')
             if linesp[0] == "!platform_table_end\n":
                 #include new line because this splits on tab.  
                 break 
-            
+
             if linesp[0][0:6] == 'A_06_P':
                 orf_ind = linesp[0]
                 orf_name = linesp[orf_header_ind]
                 platform_dict[orf_ind] = orf_name  
-        
-    
-    
-    #Find line that starts table listing gene names and index numbers
-    
-    soft_fname = os.path.normpath(oshea_pka_dir + '/GSE32703_series_matrix.txt')
-    #GSM812516: No NMPP1 0min
-    #GSM812520: 40 min: 3uM 1-NMPP1
-    #Want the ratio of 40min to 0min
 
-    with open(soft_fname) as f:
+    #Find line that starts table listing gene names and index numbers
+
+    series_fname = os.path.normpath(data_dir + series_fname)
+    #GSM1423542: nmpp1 treatment (20 min) - ACY142 +nmpp1 / ACY142
+
+    with open(series_fname) as f:
         for line in f: 
             if line.split('\t')[0] == '!series_matrix_table_begin\n':
                 break
-        
+
         exp_line = f.next()
         exp_list = [item.strip('"') for item in exp_line.split()]
-        
+
         #extract data for only the listed conditions
-        
+
         desired_arrays = [condition[1] for condition in desired_conditions]
         array_inds = [exp_list.index(array) for array in desired_arrays]
-        
+
         orf_list = []
         exp_value_list = []
-        
+
         for line in f:
             linesp = line.split('\t') 
             if linesp[0] == '!series_matrix_table_end\n':
                 break       
-            
+
             if linesp[0].strip('"')[0:6] == 'A_06_P':
                 orf_ind = linesp[0].strip('"')
                 orf = platform_dict[orf_ind]
                 orf_list.append(orf)
                 exp_values = [float(linesp[array_ind]) for array_ind in array_inds]
                 exp_value_list.append(exp_values)
-                
+
     #Make dataframe with orf values as index. 
     data = pd.DataFrame(exp_value_list, index = orf_list, columns = [condition[0] for condition in desired_conditions])
-    
+
     return data
+
 
 def write_YGOB_orth_lookup_table(species1, species2, base_dir, all_ortholog_file):
     #for each position in species 1
@@ -461,7 +461,7 @@ def write_YGOB_orth_lookup_table(species1, species2, base_dir, all_ortholog_file
                     orth_lookup.append(species1_gene + species2_genes)
                     
     orth_file_abbrev = {'Kluyveromyces lactis': 'Klac', 'Saccharomyces cerevisiae': 'Scer', 'Candida glabrata':'Cgla', 'Saccharomyces castellii' : 'Scas', 'Saccharomyces bayanus' : 'Sbay'}
-    orth_lookup_outputfname = os.path.normpath(base_dir + '\microarray_data\ortholog_files_YGOB\\' + orth_file_abbrev[species1] + "-" + orth_file_abbrev[species2] + "-orthologs.txt"  )
+    orth_lookup_outputfname = os.path.normpath(base_dir + '\expression_data\ortholog_files_YGOB\\' + orth_file_abbrev[species1] + "-" + orth_file_abbrev[species2] + "-orthologs.txt"  )
     orth_lookup_outputfile = open(orth_lookup_outputfname, 'w')
     
     for gene in orth_lookup:

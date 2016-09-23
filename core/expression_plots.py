@@ -186,3 +186,25 @@ def ROC_plot(single_expression_dataset, target_gene_set , threshold_type, quanti
     ax.set_ylabel('True Positive Rate', fontsize = 14)
     
     return TPR, FPR
+    
+def multi_scatter_plot(expression_data, conditions, xlimit = [], xticks = [], ylimit = [], yticks = []): 
+    fig, axarr = plt.subplots(len(conditions), len(conditions), sharex = True, sharey = True)
+    for jj in range(len(conditions)): 
+        condition_data_J = expression_data[conditions[jj]]
+        for kk in range(len(conditions)):
+            ax = axarr[jj,kk]
+            condition_data_K = expression_data[conditions[kk]]
+            ax.scatter(condition_data_K, condition_data_J)
+            if len(xlimit) != 0:
+                ax.set_xlim(xlimit[0],xlimit[1])
+            if len(xticks) !=0:
+                ax.set_xticks(xticks)
+            if len(ylimit) != 0 : 
+                ax.set_ylim(ylimit[0], ylimit[1])
+            if len(yticks) != 0:
+                ax.set_yticks(yticks)
+            if kk == 0:
+                ax.set_ylabel(conditions[jj], rotation = 45)
+            if jj == 0:
+                ax.set_title(conditions[kk])
+    return fig, axarr
