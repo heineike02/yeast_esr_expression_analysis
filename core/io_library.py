@@ -143,8 +143,8 @@ def parse_micro_data(species, exptype, orf_lookup):
                     pass
                 elif line.split()[0]== '!Sample_title':
                     condition_titles = line
-                    conditions = [re.split("[\-\[\]]",title)[1] for title in condition_titles.split('\t')[1:-1]]
-                    replicates = [re.split("[\-\[\]]",title)[2] for title in condition_titles.split('\t')[1:-1]]
+                    conditions = [re.split("[\-\[\]]",title)[1] for title in condition_titles.split('\t')[1:]]
+                    replicates = [re.split("[\-\[\]]",title)[2] for title in condition_titles.split('\t')[1:]]
                     break
         
         elif exptype == 'Stress': 
@@ -156,19 +156,19 @@ def parse_micro_data(species, exptype, orf_lookup):
                     pass
                 elif line.split()[0]== '!Sample_source_name_ch1':
                     replicate_titles = line
-                    replicates = [re.split("[\"_]",title)[2] for title in replicate_titles.split('\t')[1:-1]]
+                    replicates = [re.split("[\"_]",title)[2] for title in replicate_titles.split('\t')[1:]]
                     break
                     
             #Make condition list by concatenating stress and time information for each microarray
             for line in f:
                 if line.split()[0]== '!Sample_characteristics_ch1':
                     condition_stress_titles = line
-                    condition_stresses = [re.split("[\"\:]",title)[2].strip() for title in condition_stress_titles.split('\t')[1:-1]]
+                    condition_stresses = [re.split("[\"\:]",title)[2].strip() for title in condition_stress_titles.split('\t')[1:]]
                     break
             for line in f:
                 if line.split()[0]== '!Sample_characteristics_ch1':
                     condition_time_titles = line
-                    condition_times = [re.split("[\"\:]",title)[2].strip() for title in condition_time_titles.split('\t')[1:-1]]
+                    condition_times = [re.split("[\"\:]",title)[2].strip() for title in condition_time_titles.split('\t')[1:]]
                     break
             conditions = ['{}_{:03d}'.format(tup[0],int(tup[1])) for tup in zip(condition_stresses,condition_times)]
 
@@ -177,7 +177,7 @@ def parse_micro_data(species, exptype, orf_lookup):
         #scroll to beginning of data table and extract ids for each experiment
         for line in f:
             if line.split()[0]== '"ID_REF"':
-                condition_ids = line.split()[1:-1]
+                condition_ids = line.split()[1:]
                 condition_ids = [condition_id.strip('"') for condition_id in condition_ids]
                 break
         
@@ -190,7 +190,7 @@ def parse_micro_data(species, exptype, orf_lookup):
                 # The data table for the other species ends at the line !series_matrix_table_end
                 break
             chip_location_ID = linesp[0].strip('"')
-            chip_location_values = linesp[1:-1]
+            chip_location_values = linesp[1:]
             chip_location_values = [tryfloatconvert(value,np.nan) for value in chip_location_values]
             expdata_ungrouped[chip_location_ID] = chip_location_values
         
@@ -276,14 +276,11 @@ def read_SGD_features():
        
     return SC_orfs_lookup, SC_genename_lookup, SC_features_lookup
 
-def read_orth_lookup_table(species1, species2):
+def read_orth_lookup_table(species1, species2, orth_dir):
     #For a given species read in the ortholog file, make a dictionary
     orth_file_abbrev = {'Kluyveromyces lactis': 'Klac', 'Saccharomyces cerevisiae': 'Scer', 'Candida glabrata':'Cgla', 'Saccharomyces castellii' : 'Scas', 'Saccharomyces bayanus' : 'Sbay'}
     orth_fname = orth_file_abbrev[species1] + "-" + orth_file_abbrev[species2] + "-orthologs.txt"
-    # Gabe 7/12/16
-    # orth_fname = os.path.normpath(data_dir + "\ortholog_files\\" + orth_fname)
-    #orth_fname = os.path.normpath(data_dir + "/ortholog_files/" + orth_fname)
-    orth_fname = os.path.normpath(data_dir + "/ortholog_files_YGOB/" + orth_fname)
+    orth_fname = os.path.normpath(orth_dir + os.sep + orth_fname)
     
     #There are some orfs that have multiple orthologs - in that case both will be used
     with open(orth_fname) as f:
