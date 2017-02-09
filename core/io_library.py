@@ -1,8 +1,10 @@
+# -*- coding: utf-8 -*-
 from IPython.core.debugger import Tracer
 import os 
 import pandas as pd
 import numpy as np
 import re
+import math
 
 #data_dir is a global variable where all data files are stored. 
 # Gabe 7/12/16
@@ -336,6 +338,9 @@ def read_gasch_data(conditions,fname):
 def parse_data_series_matrix_SC(desired_conditions, data_dir, GEO_accession):
     #Extracts data for desired conditions from a series matrix file for S.Cerevisiae
     #Extract dictionary for each gene from family.soft file
+    #Desired condition is a list of tuples, 
+    #   the first entry is the name you want to have for your columns (need not match file)
+    #   the second entry is the array designator (should match file)
     series_fname = GEO_accession + '_series_matrix.txt'
     soft_fname = os.path.normpath(data_dir + GEO_accession + '_family.soft' )
     with open(soft_fname) as f:
@@ -397,6 +402,65 @@ def parse_data_series_matrix_SC(desired_conditions, data_dir, GEO_accession):
     data = pd.DataFrame(exp_value_list, index = orf_list, columns = [condition[0] for condition in desired_conditions])
 
     return data
+
+def load_oshea_NMPP1_data(): 
+    #Import SCer NMPP1 microarray data from O'shea microarrays
+    title_list = '"treatment: 0 min: No 1-NM-PP1"	"treatment: 10 min: 3 µM 1-NM-PP1"	"treatment: 20 min: 3 µM 1-NM-PP1"	"treatment: 30 min: 3 µM 1-NM-PP1"	"treatment: 40 min: 3 µM 1-NM-PP1"	"treatment: 50 min: No 1-NM-PP1"	"treatment: 60 min: No 1-NM-PP1"	"treatment: 70 min: No 1-NM-PP1"	"treatment: 0 min: No 1-NM-PP1"	"treatment: 10 min: 3 µM 1-NM-PP1"	"treatment: 20 min: 3 µM 1-NM-PP1"	"treatment: 30 min: No 1-NM-PP1"	"treatment: 40 min: No 1-NM-PP1"	"treatment: 50 min: No 1-NM-PP1"	"treatment: 60 min: No 1-NM-PP1"	"treatment: 70 min: No 1-NM-PP1"	"treatment: 0 min: No 1-NM-PP1"	"treatment: 10 min: 120 nM 1-NM-PP1"	"treatment: 20 min: 120 nM 1-NM-PP1"	"treatment: 30 min: No 1-NM-PP1"	"treatment: 40 min: No 1-NM-PP1"	"treatment: 50 min: No 1-NM-PP1"	"treatment: 60 min: No 1-NM-PP1"	"treatment: 70 min: No 1-NM-PP1"	"treatment: 0 min: No 1-NM-PP1"	"treatment: 5 min: 750 nM 1-NM-PP1"	"treatment: 10 min: No 1-NM-PP1"	"treatment: 15 min: 750 nM 1-NM-PP1"	"treatment: 20 min: No 1-NM-PP1"	"treatment: 25 min: 750 nM 1-NM-PP1"	"treatment: 30 min: No 1-NM-PP1"	"treatment: 35 min_chip_1: 750 nM 1-NM-PP1"	"treatment: 35 min_chip 2: 750 nM 1-NM-PP1"	"treatment: 40 min: No 1-NM-PP1"	"treatment: 45 min: 750 nM 1-NM-PP1"	"treatment: 50 min: No 1-NM-PP1"	"treatment: 55 min: 750 nM 1-NM-PP1"	"treatment: 60 min: No 1-NM-PP1"	"treatment: 65 min: No 1-NM-PP1"	"treatment: 70 min: No 1-NM-PP1"	"treatment: 0 min: No 1-NM-PP1"	"treatment: 5 min: 750 nM 1-NM-PP1"	"treatment: 10 min: No 1-NM-PP1"	"treatment: 15 min: No 1-NM-PP1"	"treatment: 20 min: No 1-NM-PP1"	"treatment: 25 min: 750 nM 1-NM-PP1"	"treatment: 30 min_chip_1: No 1-NM-PP1"	"treatment: 35 min: No 1-NM-PP1"	"treatment: 30 min_chip_2: No 1-NM-PP1"	"treatment: 40 min: No 1-NM-PP1"	"treatment: 45 min: 750 nM 1-NM-PP1"	"treatment: 50 min: No 1-NM-PP1"	"treatment: 55 min: No 1-NM-PP1"	"treatment: 60 min: No 1-NM-PP1"	"treatment: 65 min: No 1-NM-PP1"	"treatment: 70 min: No 1-NM-PP1"'
+    title_list = title_list.split('\t')
+    title_list = [item.strip("\"") for item in title_list]
+    id_ref_list = '"GSM812516"	"GSM812517"	"GSM812518"	"GSM812519"	"GSM812520"	"GSM812521"	"GSM812522"	"GSM812523"	"GSM812524"	"GSM812525"	"GSM812526"	"GSM812527"	"GSM812528"	"GSM812529"	"GSM812530"	"GSM812531"	"GSM812532"	"GSM812533"	"GSM812534"	"GSM812535"	"GSM812536"	"GSM812537"	"GSM812538"	"GSM812539"	"GSM812540"	"GSM812541"	"GSM812542"	"GSM812543"	"GSM812544"	"GSM812545"	"GSM812546"	"GSM812547"	"GSM812548"	"GSM812549"	"GSM812550"	"GSM812551"	"GSM812552"	"GSM812553"	"GSM812554"	"GSM812555"	"GSM812556"	"GSM812557"	"GSM812558"	"GSM812559"	"GSM812560"	"GSM812561"	"GSM812562"	"GSM812563"	"GSM812564"	"GSM812565"	"GSM812566"	"GSM812567"	"GSM812568"	"GSM812569"	"GSM812570"	"GSM812571"'
+    id_ref_list = id_ref_list.split('\t')
+    id_ref_list = [item.strip("\"") for item in id_ref_list]
+    
+    ind_minus = 0
+    #[0,8,16,24,40] are indices for all 0 min no NMPP1 but those other sets are hybridized to a different combination of conditions. 
+    id_ref_minus = [id_ref_list[ind_minus]]
+    
+    #add in titles for for 30,40 min +3uM NMPP1 microarrays
+    titles_plus = ['treatment: 30 min: 3 µM 1-NM-PP1','treatment: 40 min: 3 µM 1-NM-PP1']
+    inds_plus = [title_list.index(title)  for title in titles_plus]
+    ids_ref_plus = [id_ref_list[jj] for jj in inds_plus]
+    
+    oshea_microarray_name_minus = ["no 1-NMPP1, 0min"]
+    oshea_microarray_names_plus = ["3uM 1-NMPP1, 30min", "3uM 1-NMPP1, 40min"]
+    oshea_microarray_names = oshea_microarray_name_minus+oshea_microarray_names_plus
+    
+    desired_conditions = zip(oshea_microarray_names, id_ref_minus+ids_ref_plus)
+    
+    oshea_exp_data_dir = data_dir + '\GSE32703_NMPP1_SC\\' 
+    GEO_accession = 'GSE32703'
+    oshea_SC_PKA_data = parse_data_series_matrix_SC(desired_conditions, oshea_exp_data_dir, GEO_accession)
+    
+    #average controls and + NMPP1 conditions. 
+    #using the other controls is silly because they are normalized to a pool of a different experiment. 
+    #oshea_SC_PKA_data['minus_NMPP1'] = oshea_SC_PKA_data[oshea_microarray_names_minus].mean(axis = 1)
+    oshea_SC_PKA_data['plus_NMPP1'] = oshea_SC_PKA_data[oshea_microarray_names_plus].mean(axis = 1)
+    oshea_SC_PKA_data['SC_PKA(AS)+1NMPP1'] = oshea_SC_PKA_data.loc[:,'plus_NMPP1'].sub(oshea_SC_PKA_data.loc[:,'no 1-NMPP1, 0min'])
+    
+    #Add in SC common name
+    SC_orfs_lookup, SC_genename_lookup, SC_features_lookup = read_SGD_features()
+    
+    SCer_gene_name = []
+    
+    
+    for gene in oshea_SC_PKA_data.index: 
+        try:  
+            SC_genename = SC_genename_lookup[gene]
+            if isinstance(SC_genename,float):
+                if math.isnan(SC_genename):
+                    SCer_gene_name.append(gene)
+                else: 
+                    print 'float but not nan uh oh!'
+            else: 
+                SCer_gene_name.append(SC_genename_lookup[gene])
+        except KeyError: 
+            SCer_gene_name.append(gene)
+    
+    oshea_SC_PKA_data['SC_common_name'] = SCer_gene_name
+    
+    oshea_SC_PKA_data_summary = oshea_SC_PKA_data[['SC_PKA(AS)+1NMPP1', 'SC_common_name']]
+      
+    return oshea_SC_PKA_data_summary
 
 
 def write_YGOB_orth_lookup_table(species1, species2, base_dir, all_ortholog_file):

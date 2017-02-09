@@ -1,0 +1,120 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(DESeq2)
+library(ggplot2)
+library(reshape2)
+library(lattice)
+#Would be nice to automatically change pasted os separators
+
+```
+
+
+```{r}
+#DESeq LFC data for SCer WT_minus v.s. SC AS_plus
+#Note: Not enough repeats to warrant using LFC
+
+
+scCts <- "C:/Users/Ben/Documents/GitHub/expression_broad_data/expression_data/SCer_NMPP1_RNA_Seq/SC_1NMPP1_From_Kieran.tsv"
+scCountData = read.table(scCts, row.names = 1, header = TRUE, sep = " ")
+colnames(scCountData)<- c("WT_minus", "AS_plus", "WT_plus")
+ 
+meta <- "C:/Users/Ben/Documents/GitHub/expression_broad_data/expression_data/SCer_NMPP1_RNA_Seq/sc_NMPP1_metadata.csv"
+scMetaData = read.csv(meta, row.names = 1)
+#Combines final two columns of metadata
+scMetaData$condition = paste(scMetaData$strain,scMetaData$NMPP1,sep="_")
+scMetaData = scMetaData[ , "condition", drop = FALSE]
+scMetaData$condition = as.factor(scMetaData$condition)  #Avoid error message since this starts as a character. 
+# 
+# 
+scCountData_WTvAS <- scCountData[,c("WT_minus","AS_plus")]
+scMetaData_WTvAS <- scMetaData[c("WT_minus","AS_plus"), , drop = FALSE]
+# 
+sc_dds_WTvAS = DESeqDataSetFromMatrix(countData = scCountData_WTvAS, colData = scMetaData_WTvAS, design = ~condition)
+sc_dds_WTvAS$condition <- factor(sc_dds_WTvAS$condition, levels = c("WT_minus", "AS_plus"))
+# 
+paste(nrow(sc_dds_WTvAS[ rowSums(counts(sc_dds_WTvAS)) <= 1, ]), "items removed from Kl count data because there were no counts")
+sc_dds_WTvAS_filtered = sc_dds_WTvAS[ rowSums(counts(sc_dds_WTvAS)) > 1, ]
+ 
+sc_dds_WTvAS_out = DESeq(sc_dds_WTvAS_filtered)
+plotDispEsts(sc_dds_WTvAS_out)
+sc_res_WTvAS = results(sc_dds_WTvAS_out,  alpha = 10e-8)
+sc_resMLE_WTvAS <- results(sc_dds_WTvAS_out, addMLE=TRUE,  alpha = 10e-8)
+plotMA(sc_res_WTvAS, main = "KL WT- VS AS+", ylim = c(-6,6))
+par(mfrow=c(1,2))
+plotMA(sc_res_WTvAS, main = "shrunken LFC", ylim = c(-6,6))
+plotMA(sc_resMLE_WTvAS, MLE=TRUE, main="unshrunken LFC", ylim=c(-6,6))
+#Sort results and write as a .csv file
+# resOrdered_WTvAS <- res_WTvAS[order(res_WTvAS$padj),]
+# write.csv(as.data.frame(resOrdered_WTvAS),
+#            file="C:/Users/Ben/Documents/GitHub/expression_broad_data/expression_data/kl_PKA_as_20160824/DESEQ_KLac_WTmin_ASplus.csv")
+# 
+
+
+```
+
+dds[ rowSums(counts(dds)) > 1, ]
+
+library(reshape2)
+library(ggplot2)
+d <- melt(diamonds[,-c(2:4)])
+ggplot(d,aes(x = value)) + 
+    facet_wrap(~variable,scales = "free_x") + 
+    geom_histogram()
+
+ggplot(vegLengths, aes(lengthg)) + geom_histogram(alpha = 0.5, aes(y = ..density..), position = 'identity')
+
+Multi factor design: 
+design(ddsMF) <- formula(~ type + condition)
+ddsMF <- DESeq(ddsMF)
+
+Set blind = FALSE
+
+?? What's the difference between rlog and rlogTransformation
+
+Example suggests just doing the command DESEQ
+
+
+Commands from Kieran: 
+dds_all = DESeqDataSetFromMatrix(countData = raw_counts, colData = meta, ~1)
+rld_all <- rlogTransformation(dds_all)
+rlogm_all <- assay(rld_all_filtered)
+
+meanSdPlot(rlogm)
+deseq.R code,
+
+Strange that the ratio of medians normalized data doesn't really seem to have a normalized sum: 
+> apply(klCountData_psuedo,2,sum)
+AS1_plus AS2_plus WT_minus  WT_plus 
+13836185 15081192 18936631 13403258 
+> apply(klCountData_norm,2,sum)
+AS1_plus AS2_plus WT_minus  WT_plus 
+14825647 14864233 17170150 13906631
+
+Removing NA instead of adding a pseudocount: 
+> apply(klCountData,2,sum)
+AS1_plus AS2_plus WT_minus  WT_plus 
+13833701 15078708 18934147 13400774 
+> apply(klCountData_norm,2,sum)
+AS1_plus AS2_plus WT_minus  WT_plus 
+14820140 14861583 17166059 13902784 
+
+I wonder why they used that? 
+
+```{r}
+source("https://bioconductor.org/biocLite.R")
+biocLite("DESeq2")
+```
+
+Maybe I need to add type? (single read or paired end?)
+
+
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
