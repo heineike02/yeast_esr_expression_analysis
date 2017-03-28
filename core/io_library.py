@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 import re
 import math
+from collections import Counter
 
 #data_dir is a global variable where all data files are stored. 
 # Gabe 7/12/16
@@ -438,29 +439,47 @@ def load_oshea_NMPP1_data():
     oshea_SC_PKA_data['SC_PKA(AS)+1NMPP1'] = oshea_SC_PKA_data.loc[:,'plus_NMPP1'].sub(oshea_SC_PKA_data.loc[:,'no 1-NMPP1, 0min'])
     
     #Add in SC common name
-    SC_orfs_lookup, SC_genename_lookup, SC_features_lookup = read_SGD_features()
-    
-    SCer_gene_name = []
-    
-    
-    for gene in oshea_SC_PKA_data.index: 
-        try:  
-            SC_genename = SC_genename_lookup[gene]
-            if isinstance(SC_genename,float):
-                if math.isnan(SC_genename):
-                    SCer_gene_name.append(gene)
-                else: 
-                    print 'float but not nan uh oh!'
-            else: 
-                SCer_gene_name.append(SC_genename_lookup[gene])
-        except KeyError: 
-            SCer_gene_name.append(gene)
-    
-    oshea_SC_PKA_data['SC_common_name'] = SCer_gene_name
+    SC_common_names = SC_common_name_lookup(oshea_SC_PKA_data.index)
+        
+    oshea_SC_PKA_data['SC_common_name'] = SC_common_names
     
     oshea_SC_PKA_data_summary = oshea_SC_PKA_data[['SC_PKA(AS)+1NMPP1', 'SC_common_name']]
-      
+    
     return oshea_SC_PKA_data_summary
+
+def load_solis_NMPP1_data(column_to_use): 
+    #Load Solis 2016 PKA inhibition data
+    fname_solis_SC_PKA_data = os.path.normpath(data_dir + '\SCer_NMPP1_RNA_Seq\solis_2016.xlsx')
+    solis_SC_all_data = pd.read_excel(fname_solis_SC_PKA_data, header = 3)
+    
+    #The data set has a lot of duplicated indices - remove duplicates. 
+    #Make a dictionary by going down the list - this will leave in a bunch of NaNs for duplicates. 
+    solis_inhib_unique = {}
+    columns = ['Inhib','X466.1NM']
+    column_dict = {'Inhib':'HS-AA','X466.1NM':'WT'}
+    for item in solis_SC_all_data.iterrows():
+        gene = item[1]['locus']
+        exp_val = [item[1][column] for column in columns]
+        solis_inhib_unique[gene] = exp_val
+    
+    repeat_counter = Counter(solis_SC_all_data['locus'])
+    for gene in repeat_counter.keys():
+        if repeat_counter[gene] > 1:
+            dupe_rows = solis_SC_all_data[solis_SC_all_data['locus']==gene]
+            solis_inhib_unique[gene] = [np.nanmean(dupe_rows[column]) for column in columns]
+    
+    solis_SC = pd.DataFrame.from_dict(solis_inhib_unique, orient = 'index')
+    solis_SC.columns = [column_dict[column] for column in columns]
+    
+    #Add an Sc Common Name
+    SC_common_names = SC_common_name_lookup(solis_SC.index)
+        
+    solis_SC['SC_common_name'] = SC_common_names
+    
+    solis_PKA_data_summary = solis_SC[[column_to_use, 'SC_common_name']]
+    solis_PKA_data_summary.columns = ['SC_PKA(AS)+1NMPP1', 'SC_common_name']
+    
+    return solis_PKA_data_summary   
 
 
 def write_YGOB_orth_lookup_table(species1, species2, base_dir, all_ortholog_file):
@@ -544,3 +563,27 @@ def load_YGOB_annotations(species, base_dir, species_tab_file):
             annotation_lookup[gene] = annotation
     
     return annotation_lookup
+
+def SC_common_name_lookup(gene_list):
+    #SC Common Name lookup
+    #Input is a list of orfs, output is a list of common names
+    
+    
+    SC_orfs_lookup, SC_common_name_lookup, SC_features_lookup = read_SGD_features()
+    SC_common_names = []
+    
+    
+    for gene in gene_list: 
+        try:  
+            SC_common_name = SC_common_name_lookup[gene]
+            if isinstance(SC_common_name,float):
+                if math.isnan(SC_common_name):
+                    SC_common_names.append(gene)
+                else: 
+                    print 'float but not nan uh oh!'
+            else: 
+                SC_common_names.append(SC_common_name_lookup[gene])
+        except KeyError: 
+            SC_common_names.append(gene)
+    
+    return SC_common_names
