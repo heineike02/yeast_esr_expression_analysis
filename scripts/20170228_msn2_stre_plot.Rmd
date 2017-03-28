@@ -1,0 +1,41 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+rm(list = ls())
+library(datasets)
+#library(plotly)
+library(ggplot2)
+data(airquality)
+
+base_dir = "C:\\Users\\Ben\\Documents\\GitHub\\expression_broad_data"
+msn2_data = read.csv(paste(base_dir,'\\expression_data\\kl_PKA_as_20160824\\msn2_hits_STREs.csv',sep = ''))
+msn2_data
+
+p6 <- ggplot(msn2_data, aes(x = KL_PKA.AS..1NMPP1, y = SC_PKA.AS..1NMPP1, size = SC_STREs, fill = KL_STREs, label = SC_common_name )) +
+        geom_point(shape = 21) +
+        ggtitle("STREs") +
+        labs(x = "KL Expression", y = "SC Expression") 
+
+
+p6 <-  p6 + scale_fill_continuous(low = "steelblue", high = "violetred1") + 
+  
+  scale_x_continuous(limits=c(-2.6,8.4)) + scale_y_continuous(limits=c(-2.6, 8.4))
+
+#fill = c("steelblue", "yellowgreen", "violetred1","purple4")
+
+
+
+#ggplotly(p6)
+p6
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
