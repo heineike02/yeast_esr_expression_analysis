@@ -587,3 +587,48 @@ def SC_common_name_lookup(gene_list):
             SC_common_names.append(gene)
     
     return SC_common_names
+
+def build_motif_dict(fname): 
+    motif_dict = {}
+    with open(fname,'r') as f: 
+        for line in f: 
+            if line != '\n':
+                if line.split()[0]=='MOTIF':
+                    motif_dict[line.split()[1]]=line.split()[2]
+    return motif_dict
+
+def write_ame_promoter_file(promoter_database, gene_list,fname):
+        
+    with open(fname,'w') as f: 
+        for gene in gene_list:
+            try: 
+                row = promoter_database.loc[gene,]
+                header_line = '>' + row.name + ' 700bp_upstream\n'
+                seq_line = row['prom_seq'] + '\n'
+                f.write(header_line)
+                f.write(seq_line)
+            except KeyError: 
+                print gene + " not in promoter data set."
+    
+    return
+
+def read_ame_output(fname, motif_dict):
+    #reads in ame program output file from meme suits
+    #assumes first 13 lines are not data
+    motif_name_list = []
+    pval_list = []
+    with open(fname,'r') as f: 
+        for jj in range(1,13):
+            f.next()
+        for line in f:
+            #Add motif name
+            motif_id = line.split()[5]
+            motif_name_list.append(motif_dict[motif_id])
+            #Add two tailed corrected p-value to list (why two tailed? what is U-value? What is corrected p-Value?)
+            pval_list.append(line.split()[-1][0:-1])
+    
+    
+    ame_dict = {"motif_name": motif_name_list, "pval":pval_list}
+    ame_data = pd.DataFrame.from_dict(ame_dict)
+    
+    return ame_data
