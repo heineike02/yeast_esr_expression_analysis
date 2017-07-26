@@ -9,7 +9,7 @@ from collections import Counter
 
 #data_dir is a global variable where all data files are stored. 
 # Gabe 7/12/16
-data_dir = os.path.normpath("C:\Users\Ben\Documents\GitHub\expression_broad_data\expression_data")		
+data_dir = os.path.normpath("C:\\Users\Ben\Documents\GitHub\expression_broad_data\expression_data")		
 #data_dir = os.path.normpath(os.path.dirname(os.getcwd()) + '/scripts/expression_broad_data_datafiles/microarray_data/')
 
 def tryfloatconvert(value, default):
@@ -109,7 +109,7 @@ def parse_raw_exp(species):
                     break
                 if len(linesp) == 1:
                     linesp.append('nan')
-                    print 'Species: {}, Line {} was blank, made nan'.format(species, linesp[0])
+                    print('Species: {}, Line {} was blank, made nan'.format(species, linesp[0]))
                 sample_data[linesp[0]] = tryfloatconvert(linesp[1],np.nan)
                 
                 
@@ -210,11 +210,11 @@ def parse_micro_data(species, exptype, orf_lookup):
         expdata_sorted = expdata.sortlevel('conditions',axis = 'columns')
         #add in index of gene names (maybe have multi-index or just replace id numbers)
         if False in (expdata_sorted.index == orf_lookup.index):
-            print "Error: ID mismatch between experiment data and orf lookup table. Species = {}, Experiment Type = {}".format(species, exptype)
+            print("Error: ID mismatch between experiment data and orf lookup table. Species = {}, Experiment Type = {}".format(species, exptype))
             return
         
         #if no error, continue here
-        print "All ID's match between experiment data and orf lookup table. Species = {}, Experiment Type = {}".format(species, exptype)
+        print("All ID's match between experiment data and orf lookup table. Species = {}, Experiment Type = {}".format(species, exptype))
         
         mindex_arrays = [np.array(orf_lookup.index),np.array(orf_lookup)]
         mindex_tuples = list(zip(*mindex_arrays))
@@ -240,7 +240,7 @@ def make_data_tables(species_list,fname_out_bases, base_dir):
         # fname = os.path.normpath(base_dir + "\microarray_data\\raw_exp\\"  + fname_out_bases[jj] + '_raw_exp.csv')
         fname = os.path.normpath(base_dir + "/expression_data/raw_exp/"  + fname_out_bases[jj] + '_raw_exp.csv')
         raw_exp.to_csv(fname)
-        print fname + ' saved'
+        print(fname + ' saved')
         
         #Generate data for microarrays
         growth_exp = parse_micro_data(species_list[jj],'Growth',orf_lookup)
@@ -248,7 +248,7 @@ def make_data_tables(species_list,fname_out_bases, base_dir):
         # fname = os.path.normpath(base_dir + "\microarray_data\\GSE36253_Growth\\"  + fname_out_bases[jj] + '_growth.csv' )
         fname = os.path.normpath(base_dir + "/expression_data/GSE36253_Growth/"  + fname_out_bases[jj] + '_growth.csv' )
         growth_exp.to_csv(fname)
-        print fname + ' saved'
+        print(fname + ' saved')
         
         if species_list[jj] != 'Saccharomyces bayanus':
             #There is no stress dataset for S. bayanus
@@ -257,7 +257,7 @@ def make_data_tables(species_list,fname_out_bases, base_dir):
             # fname = os.path.normpath(base_dir + "\microarray_data\\GSE38478_Stress\\"  + fname_out_bases[jj] + '_stress.csv' )
             fname = os.path.normpath(base_dir + "/expression_data/GSE38478_Stress/"  + fname_out_bases[jj] + '_stress.csv' )
             stress_exp.to_csv(fname)
-            print fname + ' saved'
+            print(fname + ' saved')
     
     return 
     
@@ -580,7 +580,7 @@ def SC_common_name_lookup(gene_list):
                 if math.isnan(SC_common_name):
                     SC_common_names.append(gene)
                 else: 
-                    print 'float but not nan uh oh!'
+                    print('float but not nan uh oh!')
             else: 
                 SC_common_names.append(SC_common_name_lookup[gene])
         except KeyError: 
@@ -608,7 +608,7 @@ def write_ame_promoter_file(promoter_database, gene_list,fname):
                 f.write(header_line)
                 f.write(seq_line)
             except KeyError: 
-                print gene + " not in promoter data set."
+                print(gene + " not in promoter data set.")
     
     return
 
