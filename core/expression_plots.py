@@ -1,5 +1,5 @@
-# from core import io_library 
-import io_library
+from core import io_library 
+#import io_library
 import pandas as pd
 import numpy as np
 import seaborn as sns
@@ -86,7 +86,7 @@ def promoter_ortholog_plot(SC_genenames, species, native_orfs_empirical, conditi
             try: 
                 SC_genename = SC_genename_lookup[orf_ortholog_rev]
             except KeyError as e:
-                print 'No S.Cerevisiae ortholog for : ' + native_orf
+                print('No S.Cerevisiae ortholog for : ' + native_orf)
                 SC_genename = orf_ortholog_rev
             native_orf_orthologs.append([native_orf, SC_genename])
 
@@ -101,7 +101,7 @@ def promoter_ortholog_plot(SC_genenames, species, native_orfs_empirical, conditi
     native_orf_ortholog_dict = {}
     native_orf_ortholog_dict['display_order'] = display_order
     native_orf_ortholog_dict['SC_genename'] = SC_genenames
-    print 'reloaded 1011'
+    print('reloaded 1011')
     #Tracer()()
     native_orf_ortholog_df = pd.DataFrame(native_orf_ortholog_dict, index = native_orfs)
     
@@ -114,7 +114,7 @@ def promoter_ortholog_plot(SC_genenames, species, native_orfs_empirical, conditi
     plotted_genes.index = plotted_genes.index.droplevel(0)
     
     #Add new columns for each ortholog
-    print species   
+    print(species)   
     
     plotted_genes = pd.concat([native_orf_ortholog_df, plotted_genes], axis = 1)
     
@@ -146,7 +146,7 @@ def remove_duplicate_orfs(native_orfs, SC_genenames):
                 count = count + 1
                 if count >1:
                     remove_ind.append(ii)
-                    print 'duplicate orf mapping for {}, removed {} '.format(orf,SC_genenames[ii])
+                    print('duplicate orf mapping for {}, removed {} '.format(orf,SC_genenames[ii]))
                 
     remove_ind = sorted(remove_ind, reverse=True)
     for ind in remove_ind:
