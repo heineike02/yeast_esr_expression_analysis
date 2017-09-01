@@ -1,16 +1,19 @@
 # -*- coding: utf-8 -*-
-from IPython.core.debugger import Tracer
+#from IPython.core.debugger import Tracer
 import os 
 import pandas as pd
 import numpy as np
 import re
 import math
 from collections import Counter
-
+import subprocess
+print('I am importing io_library')
 #data_dir is a global variable where all data files are stored. 
 # Gabe 7/12/16
-data_dir = os.path.normpath("C:\\Users\Ben\Documents\GitHub\expression_broad_data\expression_data")		
+#data_dir = os.path.normpath("C:\\Users\Ben\Documents\GitHub\expression_broad_data\expression_data")		
 #data_dir = os.path.normpath(os.path.dirname(os.getcwd()) + '/scripts/expression_broad_data_datafiles/microarray_data/')
+data_dir = '/home/heineike/github/expression_broad_data/expression_data'
+print(data_dir)
 
 def tryfloatconvert(value, default):
     try:
@@ -632,3 +635,63 @@ def read_ame_output(fname, motif_dict):
     ame_data = pd.DataFrame.from_dict(ame_dict)
     
     return ame_data
+
+def run_ame_analysis(spec, target_gene_list, control_gene_list,target_fname_prefix, control_fname_prefix, motif, 
+                     promoter_dir = {'KL': data_dir+'/kl_promoters/' , 'SC': data_dir + '/sc_promoters/'},
+                     promoter_fname = {'KL': 'kl_promoters.pkl', 'SC': 'sc_promoters.pkl'},
+                     ame_scoring = 'totalhits',
+                     ame_method = 'fisher',
+                     ame_pvalue_threshold = '0.05' ):
+    #runs ame program from meme software for given target gene lit, control gene list and set of motifs. 
+    #extract promoters
+    promoters = pd.read_pickle(promoter_dir[spec] + promoter_fname[spec]) 
+    target_promoters = promoters.loc[target_gene_list,]
+    control_promoters = promoters.loc[control_gene_list,]  #for control using just promoters which have orthologs - but should I use all promoters? 
+
+
+    fname_prefixes = {'target':target_fname_prefix, 'control': control_fname_prefix}
+    promoter_lists = {'target':target_promoters, 'control': control_promoters}
+
+    for gene_set in ['target','control']:
+        fname = promoter_dir[spec] + 'promoter_sets/' + fname_prefixes[gene_set] + '_promoters.fasta'
+        with open(fname,'w') as f:
+            for row in promoter_lists[gene_set].itertuples():
+                if isinstance(row.prom_seq,str):
+                    header_line = '>' + row.Index + ' 700bp_upstream\n'
+                    seq_line = row.prom_seq + '\n'
+                    f.write(header_line)
+                    f.write(seq_line)
+                else:
+                    print(row.Index + ' in ' + gene_set + ' set promoter value is not a string : ' + str(row.prom_seq)+ '. Skipping for promoter file.')
+
+
+    #Use subprocess to run meme commands: 
+
+    #ame --verbose 1 --oc . --control all_kl_promoters.fasta --bgformat 1 --scoring avg --method ranksum --pvalue-report-threshold 0.05 mito_promoters_kl.fasta db/JASPAR/JASPAR_CORE_2016_fungi.meme
+    motif_db = promoter_dir[spec]+ motif['fname']
+    target_sequences = promoter_dir[spec] + 'promoter_sets/' + fname_prefixes['target'] + '_promoters.fasta'
+    control_sequences = promoter_dir[spec] + 'promoter_sets/' + fname_prefixes['control'] + '_promoters.fasta'
+    output_dir = promoter_dir[spec] + 'ame_output'
+    file_prefix = target_fname_prefix + '_vs_' + control_fname_prefix + '_motif_' + motif['name'] + '_pVal_' + ame_pvalue_threshold
+
+
+    ame_command = [ "/home/kieran/meme/bin/ame",
+                  "--verbose", "2",
+                  "--oc", output_dir,
+                  "--control", control_sequences,
+                  "--bgformat", "1", 
+                  "--scoring", ame_scoring,
+                  "--method", ame_method, 
+                  "--pvalue-report-threshold", ame_pvalue_threshold, 
+                  target_sequences,
+                  motif_db]
+
+    ame_output = subprocess.run(ame_command,stdout = subprocess.PIPE) 
+
+    print("ame output return code = " + str(ame_output.returncode))
+
+    #change file prefix
+    for fname in ["ame.txt","ame.html"]:
+        os.rename(output_dir + os.sep + fname, output_dir + os.sep + file_prefix + fname)
+    
+    return

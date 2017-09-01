@@ -1,3 +1,5 @@
 #ignore the expression_data and scripts/kl_unmatched_ortholog_files/ directory
 expression_data/
 scripts/kl_unmatched_ortholog_files/
+scripts/.ipynb_checkpoints/
+core/__pycache__/
