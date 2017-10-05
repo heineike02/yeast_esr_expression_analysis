@@ -8,14 +8,14 @@ import math
 from collections import Counter
 import subprocess
 print('I am importing io_library')
-#data_dir is a global variable where all data files are stored. 
-# Gabe 7/12/16
-#data_dir = os.path.normpath("C:\\Users\Ben\Documents\GitHub\expression_broad_data\expression_data")		
-#data_dir = os.path.normpath(os.path.dirname(os.getcwd()) + '/scripts/expression_broad_data_datafiles/microarray_data/')
-#data_dir = '/home/heineike/github/expression_broad_data/expression_data'
-data_dir = os.path.normpath("C:\\Users\\heine\\github\\expression_broad_data\\expression_data")		
 
-print(data_dir)
+#Indicate operating environment and import core modules
+location_input = input("what computer are you on? a = Bens, b = gpucluster, c = other   ")
+location_dict = {'a': "C:\\Users\\heine\\github\\expression_broad_data", 'b': "/home/heineike/github/expression_broad_data",'c':'you need to add your location to the location_dict'}
+base_dir = location_dict[location_input]
+print("base directory is " + base_dir)
+data_processing_dir = base_dir + os.sep + os.path.normpath("expression_data") + os.sep
+print("data processing dir is " + data_processing_dir )
 
 def tryfloatconvert(value, default):
     try:
@@ -42,7 +42,7 @@ def parse_raw_exp(species):
     #Did not need to clean data for other species - made an if loop to catch it. 
     
     #KLac had four samples    
-    input_fname = os.path.normpath(data_dir + '/raw_exp/' + raw_exp_datasets[species])
+    input_fname = os.path.normpath(data_processing_dir + '/raw_exp/' + raw_exp_datasets[species])
     with open(input_fname) as f:
         # identify samples in the dataset
         # Skips text before the line that says beginning of the interesting block:
@@ -140,7 +140,7 @@ def parse_micro_data(species, exptype, orf_lookup):
     exptype_prefixes = {'Growth': '36253', 'Stress': '38478'}
     platform_prefixes = {'Kluyveromyces lactis': '10499', 'Saccharomyces cerevisiae': '9294', 'Candida glabrata':'10497', 'Saccharomyces castellii' : '10501', 'Saccharomyces bayanus' : '10505'}
     
-    input_fname = os.path.normpath(data_dir + '/GSE' + exptype_prefixes[exptype] + '_' + exptype + '/GSE'+ exptype_prefixes[exptype] + '-GPL' + platform_prefixes[species] + '_series_matrix.txt')
+    input_fname = os.path.normpath(data_processing_dir + '/GSE' + exptype_prefixes[exptype] + '_' + exptype + '/GSE'+ exptype_prefixes[exptype] + '-GPL' + platform_prefixes[species] + '_series_matrix.txt')
     with open(input_fname) as f:
         if exptype == 'Growth': 
             
@@ -270,8 +270,8 @@ def read_SGD_features():
     
     #Read in orf/name file and make it a dictionary
     # Gabe 7/12/16
-    # SC_features_fname = os.path.normpath(data_dir + "\ortholog_files\\SGD_features.tab")
-    SC_features_fname = os.path.normpath(data_dir + "/ortholog_files/SGD_features.tab")
+    # SC_features_fname = os.path.normpath(data_processing_dir + "\ortholog_files\\SGD_features.tab")
+    SC_features_fname = os.path.normpath(data_processing_dir + "/ortholog_files/SGD_features.tab")
 
     SC_features = pd.read_csv(SC_features_fname, sep = '\t', header=None)
     SC_orfs = SC_features.groupby(1).get_group('ORF')
@@ -301,7 +301,7 @@ def read_orth_lookup_table(species1, species2, orth_dir):
     
 def get_gasch_ESR_list(act_rep):
     #For a file from the Gasch 2000 supplement, read in the data
-    fname = os.path.normpath(data_dir + "/gasch_data/gasch_fig3_" + act_rep + "_ESR.txt")
+    fname = os.path.normpath(data_processing_dir + "/gasch_data/gasch_fig3_" + act_rep + "_ESR.txt")
     
     with open(fname) as f:
         out = []
@@ -322,7 +322,7 @@ def read_gasch_data(conditions,fname):
         gene_ind = 0
     else: 
         gene_ind = 1
-    fname_full = os.path.normpath(data_dir + "/gasch_data/" + fname)
+    fname_full = os.path.normpath(data_processing_dir + "/gasch_data/" + fname)
     
     with open(fname_full) as f:
         header = next(f).split("\t")
@@ -341,14 +341,14 @@ def read_gasch_data(conditions,fname):
     
     return exp_df
 
-def parse_data_series_matrix_SC(desired_conditions, data_dir, GEO_accession):
+def parse_data_series_matrix_SC(desired_conditions, data_processing_dir, GEO_accession):
     #Extracts data for desired conditions from a series matrix file for S.Cerevisiae
     #Extract dictionary for each gene from family.soft file
     #Desired condition is a list of tuples, 
     #   the first entry is the name you want to have for your columns (need not match file)
     #   the second entry is the array designator (should match file)
     series_fname = GEO_accession + '_series_matrix.txt'
-    soft_fname = os.path.normpath(data_dir + GEO_accession + '_family.soft' )
+    soft_fname = os.path.normpath(data_processing_dir + GEO_accession + '_family.soft' )
     with open(soft_fname) as f:
         for line in f: 
             if line.split()[0] == '!platform_table_begin':
@@ -373,7 +373,7 @@ def parse_data_series_matrix_SC(desired_conditions, data_dir, GEO_accession):
 
     #Find line that starts table listing gene names and index numbers
 
-    series_fname = os.path.normpath(data_dir + series_fname)
+    series_fname = os.path.normpath(data_processing_dir + series_fname)
     #GSM1423542: nmpp1 treatment (20 min) - ACY142 +nmpp1 / ACY142
 
     with open(series_fname) as f:
@@ -433,7 +433,7 @@ def load_oshea_NMPP1_data():
     
     desired_conditions = zip(oshea_microarray_names, id_ref_minus+ids_ref_plus)
     
-    oshea_exp_data_dir = data_dir + '\GSE32703_NMPP1_SC\\' 
+    oshea_exp_data_dir = data_processing_dir + '\GSE32703_NMPP1_SC\\' 
     GEO_accession = 'GSE32703'
     oshea_SC_PKA_data = parse_data_series_matrix_SC(desired_conditions, oshea_exp_data_dir, GEO_accession)
     
@@ -454,7 +454,7 @@ def load_oshea_NMPP1_data():
 
 def load_solis_NMPP1_data(column_to_use): 
     #Load Solis 2016 PKA inhibition data
-    fname_solis_SC_PKA_data = os.path.normpath(data_dir + '\SCer_NMPP1_RNA_Seq\solis_2016.xlsx')
+    fname_solis_SC_PKA_data = os.path.normpath(data_processing_dir + '\SCer_NMPP1_RNA_Seq\solis_2016.xlsx')
     solis_SC_all_data = pd.read_excel(fname_solis_SC_PKA_data, header = 3)
     
     #The data set has a lot of duplicated indices - remove duplicates. 
@@ -593,7 +593,7 @@ def SC_common_name_lookup(gene_list):
     
     return SC_common_names
 
-def build_motif_dict(fname): 
+def build_motif_dict(fname = data_processing_dir + os.path.normpath('motifs/JASPAR_CORE_2016_fungi.meme')): 
     motif_dict = {}
     with open(fname,'r') as f: 
         for line in f: 
@@ -639,7 +639,7 @@ def read_ame_output(fname, motif_dict):
     return ame_data
 
 def run_ame_analysis(spec, target_gene_list, control_gene_list,target_fname_prefix, control_fname_prefix, motif, 
-                     promoter_dir = {'KL': data_dir+'/kl_promoters/' , 'SC': data_dir + '/sc_promoters/'},
+                     promoter_dir = {'KL': data_processing_dir+'/kl_promoters/' , 'SC': data_processing_dir + '/sc_promoters/'},
                      promoter_fname = {'KL': 'kl_promoters.pkl', 'SC': 'sc_promoters.pkl'},
                      ame_scoring = 'totalhits',
                      ame_method = 'fisher',
@@ -791,7 +791,7 @@ def load_goslim_data(GO_aspect):
     #C = cellular_component
     #F = molecular_function
     #P = biological_process
-    go_slims = pd.read_table(data_dir + os.path.normpath('/go_terms/go_slim_mapping.tab'),header = None)
+    go_slims = pd.read_table(data_processing_dir + os.path.normpath('/go_terms/go_slim_mapping.tab'),header = None)
     go_slims.columns = ['sc_genename','sc_common_name','sgd_ID','GO_aspect','GO_term','GO_term_ID','feature_type']
     
     go_slims_aspect = go_slims[go_slims['GO_aspect']==GO_aspect]
@@ -826,3 +826,83 @@ def go_terms_for_genelist(gene_set_list, go_slims_aspect, go_term_list):
                                                                             'N genes in goterm'])
                                                                             
     return go_term_df
+
+
+def make_meme_promoter_files(gene_list, fname_prefix, spec_comparision_data): 
+
+    #Read in the KL promoter database.  
+    kl_promoters = pd.read_pickle(base_dir + os.sep + os.path.join("expression_data","kl_promoters","kl_promoters.pkl"))
+
+    #Read in the SC promoter database.  
+    sc_promoters = pd.read_pickle(base_dir + os.sep + os.path.join("expression_data","sc_promoters","sc_promoters.pkl"))
+
+    # Make a subset of kl promoters 
+    gene_subset_kl_orth = list(set(spec_comparision_data[spec_comparision_data['SC_common_name'].isin(gene_list)]['kl_genename']))
+    #including set here removes duplicates
+
+    kl_promoters_subset = kl_promoters.loc[gene_subset_kl_orth,]
+
+    promoter_fname_kl = data_processing_dir + os.path.join("kl_promoters","promoter_sets", fname_prefix + "_kl.fasta")
+    prom_seq_column = 4
+    with open(promoter_fname_kl,'w') as f: 
+        for row in kl_promoters_subset.itertuples():
+            header_line = '>' + row[0] + ' 700bp_upstream\n'
+            seq_line = row[prom_seq_column] + '\n'
+            f.write(header_line)
+            f.write(seq_line)
+
+    # Make a subset of sc promoters for mitochondrial translation.  
+    gene_subset_sc = list(set(spec_comparision_data[spec_comparision_data['SC_common_name'].isin(gene_list)]['sc_genename']))
+    sc_promoters_subset = sc_promoters.loc[gene_subset_sc,]
+
+    promoter_fname_sc = data_processing_dir + os.path.join("sc_promoters","promoter_sets", fname_prefix + "_sc.fasta")
+    prom_seq_column = 2
+    with open(promoter_fname_sc,'w') as f: 
+        for row in sc_promoters_subset.itertuples():
+            header_line = '>' + row[0] + ' 700bp_upstream\n'
+            seq_line = row[prom_seq_column] + '\n'
+            f.write(header_line)
+            f.write(seq_line)
+    
+    return promoter_fname_kl, promoter_fname_sc
+
+
+def run_fimo_command(promoter_fname, thresh, fname_prefix, output_dir, 
+                     motif_fname = data_processing_dir + os.path.normpath('motifs/JASPAR_CORE_2016_fungi.meme'), 
+                     motif = "All"):
+    #Default is the Jaspar core 2016 database with all motifs
+    #should eventually make motif command accept common name, look up number in dictionary, and accept more than one. 
+    #test with this motif: MA0398.1
+    #motif_dict = io_library.build_motif_dict(fname)
+    #motif_dict['MA0371.1']
+    
+    if motif == "All":
+        motif_arg = []
+    else:
+        motif_arg = ["--motif",motif]
+
+    fimo_command = ([ "/home/kieran/meme/bin/fimo",
+                      "--oc", output_dir,
+                      "--verbosity", "1",
+                      "--thresh", str(thresh)] +
+                     motif_arg + 
+                     [ motif_fname,
+                       promoter_fname]
+                   )
+
+    fimo_output = subprocess.run(fimo_command,stdout = subprocess.PIPE) 
+
+    print("fimo output return code = " + str(fimo_output.returncode))
+
+    #change file prefix and delete output other than .txt file
+
+    files_to_remove = [output_dir + os.sep + fname for fname in ['cisml.xml', 'fimo.html', 'fimo.xml', 'fimo.gff']]
+    for file_to_remove in files_to_remove:
+        os.remove(file_to_remove)
+
+
+    fimo_fname_out = output_dir + os.sep + fname_prefix + '_fimo.txt'
+    os.rename(output_dir + os.sep + 'fimo.txt', fimo_fname_out)
+    
+    return fimo_fname_out
+    
