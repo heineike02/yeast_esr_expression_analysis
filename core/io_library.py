@@ -12,7 +12,9 @@ print('I am importing io_library')
 # Gabe 7/12/16
 #data_dir = os.path.normpath("C:\\Users\Ben\Documents\GitHub\expression_broad_data\expression_data")		
 #data_dir = os.path.normpath(os.path.dirname(os.getcwd()) + '/scripts/expression_broad_data_datafiles/microarray_data/')
-data_dir = '/home/heineike/github/expression_broad_data/expression_data'
+#data_dir = '/home/heineike/github/expression_broad_data/expression_data'
+data_dir = os.path.normpath("C:\\Users\\heine\\github\\expression_broad_data\\expression_data")		
+
 print(data_dir)
 
 def tryfloatconvert(value, default):
@@ -695,3 +697,132 @@ def run_ame_analysis(spec, target_gene_list, control_gene_list,target_fname_pref
         os.rename(output_dir + os.sep + fname, output_dir + os.sep + file_prefix + fname)
     
     return
+
+
+
+
+def make_foldchange_subsets(kl_sc_PKA_data, pthreshold_KL, pthreshold_SC): 
+    #Highlight hits that are statistically significant for K.Lactis and S. Cerevisiae and breaks them down into activated and 
+    #repressed for each group. 
+    #output is a dictionary which links a gene subset name to a list of genes using the S.Cer orf name. 
+    
+    kl_sc_PKA_data_klsig = kl_sc_PKA_data[kl_sc_PKA_data['padj_KL'] < pthreshold_KL]
+    kl_sc_PKA_data_scsig = kl_sc_PKA_data[kl_sc_PKA_data['padj_SC'] < pthreshold_SC]
+    
+    klscsig_ind = set(kl_sc_PKA_data_klsig.index)&set(kl_sc_PKA_data_scsig.index)
+    klsig_scunsig_ind = set(kl_sc_PKA_data_klsig.index)-klscsig_ind
+    scsig_klunsig_ind = set(kl_sc_PKA_data_scsig.index)-klscsig_ind
+    unsig_ind = set(kl_sc_PKA_data.index)-(set(kl_sc_PKA_data_klsig.index)|set(kl_sc_PKA_data_scsig.index))
+    
+    print("At an adjusted pvalue threshold of {:.2E} for K.Lac and {:.2E} for S.Cer, there are"
+           " {:d} genes significant for both species, {:d} genes significant for KL only,"
+           " {:d} genes significant for SC only, and {:d} unsignificant genes".format(
+                pthreshold_KL,
+                pthreshold_SC,
+                len(klscsig_ind), 
+                len(klsig_scunsig_ind),
+                len(scsig_klunsig_ind),
+                len(unsig_ind)))
+    
+    kl_sc_PKA_data_klsig_scunsig = kl_sc_PKA_data.loc[list(klsig_scunsig_ind)]
+    kl_sc_PKA_data_scsig_klunsig = kl_sc_PKA_data.loc[list(scsig_klunsig_ind)]
+    kl_sc_PKA_data_klscsig = kl_sc_PKA_data.loc[list(klscsig_ind)]
+    kl_sc_PKA_data_unsig = kl_sc_PKA_data.loc[list(unsig_ind)]
+    
+    #Significant for both, but up in SC and down in kl. 
+    upsc_downkl = list(kl_sc_PKA_data_klscsig[(kl_sc_PKA_data_klscsig['log2FoldChange_SC']>0)&(kl_sc_PKA_data_klscsig['log2FoldChange_KL']<0)]['sc_genename'])
+    print("Genes that are up in S.Cer and Down in K.Lac")
+    print(upsc_downkl)
+    #HEF3 {'YNL014W'}
+    
+    upkl_downsc = list(kl_sc_PKA_data_klscsig[(kl_sc_PKA_data_klscsig['log2FoldChange_SC']<0)&(kl_sc_PKA_data_klscsig['log2FoldChange_KL']>0)]['sc_genename'])
+    print("Genes that are up in K.Lac and Down in S.Cer")
+    print(upkl_downsc)
+    
+    #Add in the one gene that is significant for both but repressed in SC and activated in KL. 
+    klsig_act_genes = list(kl_sc_PKA_data_klsig_scunsig[kl_sc_PKA_data_klsig_scunsig['log2FoldChange_KL']>0]['sc_genename'])
+    for gene in upkl_downsc: 
+        klsig_act_genes.append(gene)
+    
+    #Add in the one gene that is significant for both but activated in SC and repressed in KL.
+    klsig_rep_genes = list(kl_sc_PKA_data_klsig_scunsig[kl_sc_PKA_data_klsig_scunsig['log2FoldChange_KL']<0]['sc_genename'])
+    for gene in upsc_downkl: 
+        klsig_rep_genes.append(gene)
+    
+    #Add in the one gene that is significant for both but activated in SC and repressed in KL.
+    scsig_act_genes = list(kl_sc_PKA_data_scsig_klunsig[kl_sc_PKA_data_scsig_klunsig['log2FoldChange_SC']>0]['sc_genename'])
+    for gene in upsc_downkl: 
+        scsig_act_genes.append(gene)
+    
+    #Add in the one gene that is significant for both but repressed in SC and activated in KL. 
+    scsig_rep_genes = list(kl_sc_PKA_data_scsig_klunsig[kl_sc_PKA_data_scsig_klunsig['log2FoldChange_SC']<0]['sc_genename'])
+    for gene in upkl_downsc: 
+        scsig_rep_genes.append(gene)
+    
+    gene_set_dict = {'klsig_act': klsig_act_genes,
+                    'klsig_rep': klsig_rep_genes,
+                    'scsig_act': scsig_act_genes,
+                    'scsig_rep': scsig_rep_genes,
+                    'klscsig_act': list(kl_sc_PKA_data_klscsig[(kl_sc_PKA_data_klscsig['log2FoldChange_SC']>0) & (kl_sc_PKA_data_klscsig['log2FoldChange_KL']>0)]['sc_genename']),
+                    'klscsig_rep': list(kl_sc_PKA_data_klscsig[(kl_sc_PKA_data_klscsig['log2FoldChange_SC']<0) & (kl_sc_PKA_data_klscsig['log2FoldChange_KL']<0)]['sc_genename']),
+                    'klscunsig': list(kl_sc_PKA_data_unsig['sc_genename'])
+                    }
+    return gene_set_dict
+
+def kl_genename_convert(df): 
+    #Input is dataframe with GFF version of kl genename as the index. 
+    #Ouput is dataframe with standard version of kl genename as the index. 
+
+    kl_genename = []
+    for gene in df.index: 
+        if gene[0:5]=='KLLA0':
+            new_gene = gene.split('_')[0]+gene.split('_')[1]
+        else: 
+            new_gene = gene
+        kl_genename.append(new_gene)
+    
+    df['kl_genename'] = kl_genename
+    df.set_index('kl_genename',inplace = True)
+
+    return df
+    
+def load_goslim_data(GO_aspect):
+    #The three GO_aspect values are: 
+    #C = cellular_component
+    #F = molecular_function
+    #P = biological_process
+    go_slims = pd.read_table(data_dir + os.path.normpath('/go_terms/go_slim_mapping.tab'),header = None)
+    go_slims.columns = ['sc_genename','sc_common_name','sgd_ID','GO_aspect','GO_term','GO_term_ID','feature_type']
+    
+    go_slims_aspect = go_slims[go_slims['GO_aspect']==GO_aspect]
+    go_term_list = list(set(go_slims_aspect['GO_term']))
+    
+    return go_slims_aspect, go_term_list
+
+def go_terms_for_genelist(gene_set_list, go_slims_aspect, go_term_list): 
+    #for a given gene list provides a dataframe listing genes in that list for each go term. 
+    go_term_data = []
+
+    go_term_index = []
+
+    for term in go_term_list: 
+        term_genes = list(go_slims_aspect[go_slims_aspect['GO_term']==term]['sc_genename'])
+        if len(term_genes)> len(set(term_genes)):
+            print("Duplicate Term: " + term)
+        subset_genes_in_goterm =  set(gene_set_list) & set(term_genes)
+        N_subset_genes_in_goterm = len(subset_genes_in_goterm)
+        N_genes_in_goterm = len(term_genes)
+        if N_subset_genes_in_goterm >0:
+            subset_genes_in_goterm_commonname = SC_common_name_lookup(subset_genes_in_goterm)
+            go_term_data.append((N_subset_genes_in_goterm,
+                                subset_genes_in_goterm,
+                                subset_genes_in_goterm_commonname,
+                                N_genes_in_goterm))
+            go_term_index.append(term)
+
+    go_term_df = pd.DataFrame(go_term_data, index = go_term_index,columns = ['N subset genes in goterm',
+                                                                            'genes',
+                                                                            'genes common name',
+                                                                            'N genes in goterm'])
+                                                                            
+    return go_term_df
