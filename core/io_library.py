@@ -8,6 +8,9 @@ import math
 from collections import Counter
 import subprocess
 print('I am importing io_library')
+import matplotlib.pyplot as plt
+from Bio.Seq import Seq
+from Bio.Alphabet import generic_dna
 
 #Indicate operating environment and import core modules
 location_input = input("what computer are you on? a = Bens, b = gpucluster, c = other   ")
@@ -905,4 +908,152 @@ def run_fimo_command(promoter_fname, thresh, fname_prefix, output_dir,
     os.rename(output_dir + os.sep + 'fimo.txt', fimo_fname_out)
     
     return fimo_fname_out
+
+def nucleotide_frequency(species):
+    promoters = pd.read_pickle(base_dir + os.sep + os.path.join("expression_data",
+                                                                species.lower()+ "_promoters",species.lower() + "_promoters.pkl"))
+    actg_count = np.array([0,0,0,0])
+    alphabet = 'ACGT'
+
+    for gene, row in promoters.iterrows():
+        prom_seq = row.loc['prom_seq']
+        actg_count_gene = np.array([prom_seq.count(letter) for letter in alphabet])
+        actg_count = actg_count + actg_count_gene
+
+    nucleotide_frequency_out = actg_count/sum(actg_count)
     
+    print("nucleotide frequency for " + alphabet + " = " + str(nucleotide_frequency_out))
+    
+    return nucleotide_frequency_out
+    
+def hex_color_dictionary(input_list):
+    cmap = plt.get_cmap('hsv')
+    N = len(input_list)
+    cmap_discrete = [cmap(nn/N) for nn in range(0,N)]
+    #cmap=plt.get_cmap('tab10')
+    hex_colors = []
+
+    for rgb_color in cmap_discrete:
+        int_color = tuple(int(rgb_element*255) for rgb_element in rgb_color)
+        hex_colors.append('#{:02x}{:02x}{:02x}'.format(*int_color))
+
+    input_color_dict = dict(zip(input_list,hex_colors))
+    
+    return input_color_dict
+
+def exact_promoter_scan(gene_list, motif_dict, promoter_database): 
+    #finds nonoverlapping exact matches forward and backward for motifs. 
+    #input:  motif dictionary, promoter data structure, gene list from dataframe (genes must be primary key of promoter data structure)
+    #output: dataframe with primary key as gene list.  columns are presence of scanned motifs. 
+
+    n_motifs = []
+    output_data_frame = pd.DataFrame(index = gene_list)
+
+    for motif_name, motif in motif_dict.items():
+        L_motif = len(motif)
+
+
+        n_motifs = []
+
+        for gene in gene_list: 
+
+            #Make a sequence object
+            promoter_database.loc[gene]
+            prom_seq = Seq(promoter_database.loc[gene]['prom_seq'],alphabet=generic_dna)
+
+            #fwd search
+            prom_seq_fwd = str(prom_seq)
+            motif_sites_fwd = [m.start() for m in re.finditer(motif, prom_seq_fwd)]
+            #to find overlapping motifs
+            #[m.start() fr m in re.finditer('(?=' + motif + ')', prom_seq_rev)]
+
+            #reverse search
+            #rev search
+            prom_seq_rev = str(prom_seq.reverse_complement())
+            #location is in reference to the fwd seq
+            motif_sites_rev = [len(prom_seq_rev) - m.start() - L_motif for m in re.finditer(motif, prom_seq_rev)]
+
+            #This funtion doesn't do anything to locate the sites. 
+            n_motifs_gene = len(motif_sites_fwd) + len(motif_sites_rev)
+
+            n_motifs.append(n_motifs_gene)
+
+        output_data_frame[motif_name] = n_motifs
+    
+    return output_data_frame
+
+def threshold_sign(x, high_threshold, low_threshold): 
+    if x > high_threshold:
+        x_sign = 1
+    elif x< low_threshold:
+        x_sign = -1
+    else: 
+        x_sign = 0
+        
+    return x_sign
+
+def threshold_group_SC(a,b,high_threshold, low_threshold):
+    #input: a, b, high_threshold, low_threshold
+    #output: group - either {'up_up', 'up_flat','up_down','flat_flat', 'down_flat','down_down'}
+
+    a_sign = threshold_sign(a, high_threshold, low_threshold)
+    b_sign = threshold_sign(b, high_threshold, low_threshold)
+
+    sign_sum = a_sign+b_sign
+
+    if sign_sum ==2:
+        group = 'up_up'
+    elif sign_sum == -2: 
+        group = 'down_down'
+    elif sign_sum == 1: 
+        group = 'up_flat'
+    elif sign_sum == -1: 
+        group = 'down_flat'
+    elif sign_sum == 0:
+        if a_sign-b_sign == 0:
+            group = 'flat_flat'
+        else: 
+            group = 'up_down'
+    else: 
+        print('Error - did not assign group')
+
+    return group
+
+def threshold_group_SC_series(A,B, high_threshold, low_threshold ):
+    
+    AB = pd.concat([A,B], axis = 1)
+
+    group = []
+    for ind,row in AB.iterrows():
+        group.append(threshold_group_SC(row[0],row[1],high_threshold, low_threshold))
+
+    group = pd.Series(group, index = AB.index)
+
+    return group
+
+def threshold_group_KL(a,high_threshold, low_threshold):
+    #input: a, b, high_threshold, low_threshold
+    #output: group - either {'up_up', 'up_flat','up_down','flat_flat', 'down_flat','down_down'}
+
+    a_sign = threshold_sign(a, high_threshold, low_threshold)
+
+    if a_sign ==1:
+        group = 'up'
+    elif a_sign == 0: 
+        group = 'flat'
+    elif a_sign == -1: 
+        group = 'down'
+    else: 
+        print('Error - did not assign group')
+
+    return group
+
+def threshold_group_KL_series(A, high_threshold, low_threshold ):
+    
+    group = []
+    for ind,item in A.iteritems():
+        group.append(threshold_group_KL(item,high_threshold, low_threshold))
+
+    group = pd.Series(group, index = A.index)
+
+    return group
