@@ -5,12 +5,14 @@ import pandas as pd
 import numpy as np
 import re
 import math
+import scipy.stats as stats
 from collections import Counter
 import subprocess
 print('I am importing io_library')
 import matplotlib.pyplot as plt
 from Bio.Seq import Seq
 from Bio.Alphabet import generic_dna
+from ete3 import Tree
 
 #Indicate operating environment and import core modules
 location_input = input("what computer are you on? a = Bens, b = gpucluster, c = other   ")
@@ -596,6 +598,23 @@ def SC_common_name_lookup(gene_list):
     
     return SC_common_names
 
+def SC_orf_lookup_by_name(name_list):
+    #Input is a list of common names, output is a list of orfs
+    
+    SC_orfs_lookup, SC_common_name_lookup, SC_features_lookup = read_SGD_features()
+    sc_genenames = []
+    
+    for name in name_list: 
+        try:  
+            sc_genename = SC_orfs_lookup[name]
+        except KeyError: 
+            print("S.Cer orf for " + name + "not found")
+            sc_genename = name
+        
+        sc_genenames.append(sc_genename)
+    
+    return sc_genenames
+
 def build_motif_dict(fname = data_processing_dir + os.path.normpath('motifs/JASPAR_CORE_2016_fungi.meme')): 
     motif_dict = {}
     with open(fname,'r') as f: 
@@ -830,6 +849,69 @@ def go_terms_for_genelist(gene_set_list, go_slims_aspect, go_term_list):
                                                                             
     return go_term_df
 
+def go_term_enrichment(gene_set_list, background_genes, go_term_list, go_slims_aspect): 
+    #input is gene_set_list, background_genes list, go_term_list, and go_slims_aspect dataframe with data for each go term.  
+    #output is a dataframe with enrichment columns and full list of enriched genes. 
+       
+    missing_genes = ['Scer_YGOB_YDR134C', 'Scer_RDN18-1', 
+                     'Scer_YGOB_SDC25', 'Scer_RDN25-1', 
+                     'Scer_RDN58-1', 'Scer_YGOB_Anc_7.495', 
+                     'Scer_YGOB_ADL119W', 'Scer_RDN5-1']
+    
+    
+    bg_filtered_genes = set(background_genes) & set(missing_genes)
+    if len(bg_filtered_genes)>0:
+        print("The following missing genes are filtered out of the background set:")
+        print(bg_filtered_genes)
+    background_genes_filtered = list(set(background_genes)-set(missing_genes))
+    
+    
+    #filter out missing genes 
+    gene_set_filtered_genes = set(gene_set_list) & set(missing_genes)
+    if len(gene_set_filtered_genes)>0:
+        print("The following missing genes are filtered out of the input set:")
+        print(gene_set_filtered_genes)
+        gene_set_list = list(set(gene_set_list)-set(missing_genes))
+    go_term_data = []
+    go_term_list_filtered = go_term_list.copy()
+    for term in go_term_list: 
+        term_genes = list(go_slims_aspect[go_slims_aspect['GO_term']==term]['sc_genename'])
+        if len(term_genes)> len(set(term_genes)):
+            print("Duplicate Term for term " + term)
+        subset_genes_in_goterm =  set(gene_set_list) & set(term_genes)
+        N_subset_genes_in_goterm = len(subset_genes_in_goterm)
+        N_subset_genes_notin_goterm = len(gene_set_list)-N_subset_genes_in_goterm
+        N_bg_genes_in_goterm = len(set(background_genes_filtered) & set(term_genes))
+        if N_bg_genes_in_goterm >0:
+            N_bg_genes_notin_goterm = len(background_genes_filtered)-N_bg_genes_in_goterm
+            oddsratio, pvalue = stats.fisher_exact([[N_subset_genes_in_goterm, N_bg_genes_in_goterm], [N_subset_genes_notin_goterm, N_bg_genes_notin_goterm]],alternative = 'greater')
+            subset_genes_in_goterm_commonname = SC_common_name_lookup(subset_genes_in_goterm)
+            go_term_data.append((N_subset_genes_in_goterm,
+                                 len(gene_set_list),
+                                 float(N_subset_genes_in_goterm)/float(len(gene_set_list)),
+                                 float(N_bg_genes_in_goterm)/float(len(background_genes_filtered)),
+                                 float(N_subset_genes_in_goterm)/float(N_bg_genes_in_goterm),
+                                 pvalue,
+                                 subset_genes_in_goterm,
+                                 subset_genes_in_goterm_commonname,
+                                 oddsratio))
+        else:
+            print(term + " term removed: no background genes")
+            go_term_list_filtered.remove(term) 
+    
+    go_term_enrichment = pd.DataFrame(go_term_data, index = go_term_list_filtered,columns = ['N subset genes in goterm',
+                                                                            'N genes in subset',
+                                                                            'pct goterm in subset',
+                                                                            'pct go term in background',
+                                                                            'pct of go terms genes in subset',
+                                                                            'pvalue',
+                                                                            'genes',
+                                                                            'genes common name',
+                                                                            'oddsratio'])
+    
+    go_term_enrichment.sort_values(by = 'pvalue', inplace = True)
+    
+    return go_term_enrichment
 
 def make_meme_promoter_files(gene_list, fname_prefix, spec_comparision_data): 
 
@@ -1057,3 +1139,228 @@ def threshold_group_KL_series(A, high_threshold, low_threshold ):
     group = pd.Series(group, index = A.index)
 
     return group
+
+def build_phylo_conversion_sc():
+    #builds file for name conversion from phylome_db tree files. 
+    #that file can be read in with pd.read_table()
+    
+    fname_gene_conversion = data_processing_dir + os.path.normpath("phylogenetic_trees/all_id_conversion.txt")
+    fname_gene_conversion_sc = data_processing_dir + os.path.normpath("phylogenetic_trees/sc_id_conversion.txt")
+    n_start = 2531
+    n_stop = 24766
+    
+    with open(fname_gene_conversion) as gc_all:
+        with open(fname_gene_conversion_sc,"w") as gc_sc:
+            gene_name_options = []
+            gene_name = 'init'
+            for i, line in enumerate(gc_all):
+                if i >= n_start-1:
+                    #Get first line - gene_name
+                    newline_gene_name = line.split()[0]
+                    #print('gene_name: ' + gene_name)
+                    #print('newline_gene_name:' + newline_gene_name)
+                    if newline_gene_name == gene_name: 
+                        #if new gene name matches last one, add option to list
+                        gene_name_options.append(line.split())
+                    else: 
+                        #if new gene name doesn't match, 
+                        
+                        #Process last set of options (except on first run)
+                        if len(gene_name_options)>0:
+                            phylome_name = gene_name
+                            gene_name_option_dict = {item[1]:item[2] for item in gene_name_options}
+                            if "ensembl" in set(gene_name_option_dict.keys()):
+                                ref_name = gene_name_option_dict["ensembl"]
+                            elif "genename" in set(gene_name_option_dict.keys()):
+                                ref_name = gene_name_option_dict["genename"]
+                                print('no ensemble id for ' + gene_name + ', using genename: ' + ref_name)
+                            else: 
+                                print('no ensemble id or genename for ' + gene_name + ', using phylome DB id')
+                                ref_name = phylome_name
+                            gc_sc.write(phylome_name + '\t' + ref_name + '\n') 
+                        
+                        #Reset gene name and reset gene name options
+                        gene_name = newline_gene_name
+                        #print('next gene: ' + newline_gene_name)
+                        gene_name_options = []                  
+                        gene_name_options.append(line.split())
+                    if i >= n_stop-1:
+                        #Process final set of options
+                        phylome_name = gene_name
+                        gene_name_option_dict = {item[1]:item[2] for item in gene_name_options}
+                        if "ensembl" in set(gene_name_option_dict.keys()):
+                            ref_name = gene_name_option_dict["ensembl"]
+                        elif "genename" in set(gene_name_option_dict.keys()):
+                            ref_name = gene_name_option_dict["genename"]
+                            print('no ensemble id for ' + gene_name + ', using genename: ' + ref_name)
+                        else: 
+                            print('no ensemble id or genename for ' + gene_name + ', using phylome DB id')
+                            ref_name = phylome_name
+                        gc_sc.write(phylome_name + '\t' + ref_name + '\n') 
+                        print('Done')
+                        break
+
+    return
+
+def build_phylo_conversion_kl():
+    #builds file for name conversion from phylome_db tree files for K.Lactis genes. 
+    #that file can be read in with pd.read_table()
+    fname_gene_conversion = data_processing_dir + os.path.normpath("phylogenetic_trees/all_id_conversion.txt")
+    fname_gene_conversion_kl = data_processing_dir + os.path.normpath("phylogenetic_trees/kl_id_conversion.txt")
+    n_start = 88796
+    n_stop = 98798
+    
+    with open(fname_gene_conversion) as gc_all:
+        with open(fname_gene_conversion_kl,"w") as gc_kl:
+            gene_name_options = []
+            gene_name = 'init'
+            for i, line in enumerate(gc_all):
+                if i >= n_start-1:
+                    #Get first line - gene_name
+                    newline_gene_name = line.split()[0]
+                    #print('gene_name: ' + gene_name)
+                    #print('newline_gene_name:' + newline_gene_name)
+                    if newline_gene_name == gene_name: 
+                        #if new gene name matches last one, add option to list
+                        gene_name_options.append(line.split())
+                    else: 
+                        #if new gene name doesn't match, 
+    
+                        #Process last set of options (except on first run)
+                        if len(gene_name_options)>0:
+                            phylome_name = gene_name
+                            gene_name_option_dict = {item[1]:item[2] for item in gene_name_options}
+                            if "Genolevures" in set(gene_name_option_dict.keys()):
+                                ref_name = gene_name_option_dict["Genolevures"]
+                            elif "genename" in set(gene_name_option_dict.keys()):
+                                ref_name = gene_name_option_dict["genename"]
+                                print('no Genolevures id for ' + gene_name + ', using genename: ' + ref_name)
+                            else: 
+                                print('no Genolevures id or genename for ' + gene_name + ', using phylome DB id')
+                                ref_name = phylome_name
+                            gc_kl.write(phylome_name + '\t' + ref_name + '\n') 
+    
+                        #Reset gene name and reset gene name options
+                        gene_name = newline_gene_name
+                        #print('next gene: ' + newline_gene_name)
+                        gene_name_options = []                  
+                        gene_name_options.append(line.split())
+                    if i >= n_stop-1:
+                        #Process final set of options
+                        phylome_name = gene_name
+                        gene_name_option_dict = {item[1]:item[2] for item in gene_name_options}
+                        if "Genolevures" in set(gene_name_option_dict.keys()):
+                            ref_name = gene_name_option_dict["Genolevures"]
+                        elif "genename" in set(gene_name_option_dict.keys()):
+                            ref_name = gene_name_option_dict["genename"]
+                            print('no Genolevures id for ' + gene_name + ', using genename: ' + ref_name)
+                        else: 
+                            print('no Genolevures id or genename for ' + gene_name + ', using phylome DB id')
+                            ref_name = phylome_name
+                        gc_kl.write(phylome_name + '\t' + ref_name + '\n') 
+                        print('Done')
+                        break
+    return
+
+
+def assign_topologies(trees, WGH_branch_seed, KLE_branch_seed, ZT_branch_seed, outgroups, verbose = False):
+    topology_dict = {WGH_branch_seed: "C", KLE_branch_seed: "A", ZT_branch_seed:"B"}
+    
+    topologies = []
+    for gene,row in trees.iterrows():
+        #print(gene)
+        tree_string = row[2]
+        #tree_string = trees.loc[gene]["tree"]
+        #"(Phy000D0CO_YEAST:0.0377129,Phy000NQ6C_SACBA:0.0653462,((Phy004FKRY_NAUDC:0.0912444,Phy000NS92_SACCA:0.115243)0.99985:0.0765755,((((Phy004F4O4_588726:0.253337,(Phy004F7XM_1071379:0.214507,(Phy000JNPU_VANPO:0.153757,Phy004FCCE_TETPH:0.171821)0.99985:0.111541)0.998964:0.0332526)0.980573:0.0259834,(((Phy000JRAI_KLUWA:0.065763,Phy002423J_LACTH:0.0853684)0.99985:0.118867,(Phy000NWPH_SACKL:0.118849,(Phy0000C6I_ASHGO:0.163073,Phy0008PPH_KLULA:0.187974)0.999239:0.0291304)0.99985:0.036076)0.99985:0.0367641,(Phy004FVSC_TORDC:0.14757,Phy00244CV_ZYGRO:0.280471)0.99985:0.0455249)0.99985:0.0234786)0.952493:0.0167291,(Phy004FGQ7_KAZAF:0.157457,(Phy00042WG_CANGA:0.179752,(Phy003M12E_51660:0.219913,Phy003LT0W_51914:0.298372)0.99985:0.0535978)0.99985:0.0516007)0.953575:0.0196913)0.972812:0.0235719,((Phy000NM4H_SACBA:0.0797609,Phy000CVUB_YEAST:0.111285)0.99985:0.241968,(((Phy004G2AN_HANAN:0.607512,((Phy0043HAA_DEKBR:0.613043,(Phy0002J8L_CANAL:0.261718,(Phy000M23V_PICST:0.182477,Phy0005LWI_DEBHA:0.179178)0.99985:0.0567132)0.99985:0.131607)0.99985:0.0941789,(Phy000EWFJ_YARLI:0.646307,((Phy004D9WH_45786:0.295069,Phy004DAUY_45786:0.786718)0.99985:0.125919,(Phy000D148_SCHPO:0.930355,((Phy004D9WR_45786:0.198548,((Phy004G3IF_HANAN:0.174478,(Phy0000C5V_ASHGO:0.212532,(((Phy004F8NL_1071379:0.141367,(Phy004FD9R_TETPH:0.141431,Phy000JLBS_VANPO:0.116295)0.99985:0.0650686)0.99985:0.0356093,((((Phy004F1VH_588726:0.164592,(Phy000NUHY_SACCA:0.0565971,Phy004FI75_NAUDC:0.0592237)0.99985:0.032963)0.967128:0.0146652,(Phy003M2DA_51660:0.0718156,Phy003LSK0_51914:0.123436)0.99985:0.0352864)0.993589:0.0159514,(Phy000CY5Z_YEAST:0.0752616,(Phy00042VW_CANGA:0.0982544,(Phy004FH3D_KAZAF:0.0433095,Phy004FGT3_KAZAF:0.0291784)0.99985:0.0655249)0.998957:0.0272474)0.991005:0.0227564)0.99985:0.0179636,(Phy004FYCC_TORDC:0.0799393,Phy00244D9_ZYGRO:0.119371)0.994601:0.0197164)0.99985:0.0232753)0.99985:0.060257,(Phy0023ZJ5_SACKL:0.0790576,(Phy0008M3B_KLULA:0.284,(Phy002433O_LACTH:0.034923,Phy000JPRE_KLUWA:0.0533176)0.99985:0.0827682)0.99985:0.0294055)0.934264:0.0162554)0.99985:0.0331771)0.99985:0.0953258)0.99985:0.104003,(Phy0043EA7_DEKBR:0.329095,(Phy0002IUY_CANAL:0.113784,(Phy0005HV2_DEBHA:0.168247,Phy000M1Q7_PICST:0.0681382)0.2608:0.0373838)0.99985:0.142364)0.949433:0.0296014)0.99985:0.058341)0.99985:0.439321,((Phy000D147_SCHPO:0.337686,(Phy0043DGZ_DEKBR:0.179192,((Phy000NXUS_SACKL:0.0119718,(Phy000JQ10_KLUWA:0.00356342,Phy00240LJ_LACTH:0.0173874)0.99985:0.0420066)0.973509:0.0124443,(Phy000PHQX_KLULA:0.0837091,((Phy004FW12_TORDC:0.0270097,Phy00245C9_ZYGRO:0.0799646)0.99985:0.0293122,((Phy003LVON_51914:0.00488701,Phy003LVW9_51914:0.0214526)0.99985:0.049813,((Phy004FB62_TETPH:0.0450363,Phy000JO2T_VANPO:0.0157048)0.99985:0.0284698,((Phy004F55K_588726:0.043957,((Phy003ET24_SACBA:9.8e-08,Phy003ESPQ_SACBA:0.00517011)0.99985:0.0245326,(Phy000CZIO_YEAST:0.00368032,Phy000CW40_YEAST:0.00684232)0.99985:0.0147427)0.99985:0.0233092)0.99985:0.0129149,(((Phy004FL32_NAUDC:8.89e-08,Phy004FJ8W_NAUDC:0.0210664)0.99985:0.018709,(Phy000NR38_SACCA:0.00441582,Phy000NRWI_SACCA:0.0338758)0.99985:0.0200783)0.848919:0.00637556,(Phy000HL5M_CANGA:0.0380492,(Phy004FFGC_KAZAF:0.00245352,Phy004FHDM_KAZAF:0.00791846)0.99985:0.0383082)0.99985:0.0206773)0.929977:0.010802)0.99985:0.0134442)0.98884:0.0114619)0.997822:0.00886798)0.99985:0.0274939)0.99985:0.0182694)0.99985:0.146112)0.99985:0.27075)0.99985:0.616952,((Phy000NXBP_SACKL:0.0276937,((Phy0000DBL_ASHGO:0.0543494,(Phy000JPNA_KLUWA:0.0151433,Phy00243RQ_LACTH:0.00665339)0.99985:0.0350212)0.99985:0.02568,(Phy0008O77_KLULA:0.0552353,((Phy004FCXO_TETPH:0.0382825,(Phy000JO2F_VANPO:0.030324,Phy000JND8_VANPO:0.0667573)0.99985:0.0551445)0.99985:0.0188317,(Phy004F80P_1071379:0.0787646,((Phy004F1YX_588726:0.0731204,(Phy004FFWL_KAZAF:0.0212898,((Phy000CYMB_YEAST:0.0105865,Phy000NLRW_YEAST:0.0212602)0.99985:0.0105349,(Phy003ESNK_SACBA:0.0190025,Phy000NLWS_SACBA:0.0299389)0.99985:0.00986892)0.99985:0.0227824)0.97486:0.00873849)0.970244:0.00473995,((Phy000457A_CANGA:0.0545661,(Phy004FKDA_NAUDC:0.0379504,Phy000NR20_SACCA:0.0526524)0.953743:0.014551)0.994092:0.0148149,((Phy003LUN2_51914:0.0422204,Phy003M1LP_51660:0.036874)0.995219:0.011347,(Phy004FVH1_TORDC:0.0373219,Phy00244HG_ZYGRO:0.100079)0.99985:0.0412169)0.921431:0.00903586)0.998632:0.0123235)0.99985:0.0134243)0.985352:0.00847894)0.99985:0.0739419)0.99985:0.0195691)0.998527:0.0148528)0.99985:0.0749685,(Phy004G2XL_HANAN:0.14119,(((Phy000EWZ3_YARLI:0.0811337,(Phy000EUZU_YARLI:0.0243446,(Phy003G9YQ_YARLI:0.0484158,Phy000EXEP_YARLI:0.0328251)0.995874:0.0170054)0.99985:0.0245836)0.99985:0.0600747,(Phy004D8CO_45786:0.151996,(Phy004DBR1_45786:0.0452565,Phy004DANJ_45786:0.0687919)0.99985:0.028464)0.99985:0.0358608)0.99985:0.0642867,((Phy0002HWT_CANAL:0.0628017,(Phy0005M0G_DEBHA:0.102678,Phy000M2EQ_PICST:0.0437075)0.99985:0.0338248)0.99985:0.0940611,((Phy0002LM8_CANAL:0.0839271,Phy0005M8P_DEBHA:0.180701)0.99985:0.0500089,(((Phy001SWG1_SCHPO:0.0352369,Phy001SWG2_SCHPO:0.063444)0.99985:0.199495,(Phy0043E6V_DEKBR:0.103961,Phy0043H82_DEKBR:0.133998)0.99985:0.110704)0.99985:0.042867,(Phy004G3G7_HANAN:0.0982853,((Phy00240WA_LACTH:0.0451633,Phy000JR1W_KLUWA:0.0681361)0.99985:0.0587049,((Phy003FKGG_ASHGO:0.0811873,(Phy000NYEU_SACKL:0.0536055,Phy0008N6P_KLULA:0.0923059)0.77818:0.00986821)0.998707:0.0219914,(Phy004FVHE_TORDC:0.063156,(((Phy000NU01_SACCA:0.0890922,(((Phy004F8XZ_1071379:0.132533,(Phy003LSW3_51914:0.107247,Phy003M3EY_51660:0.0677824)0.99985:0.0412051)0.858533:0.00671357,(Phy004FKS7_NAUDC:0.0665065,(Phy000JLXL_VANPO:0.0625492,(Phy004FCBV_TETPH:0.145474,Phy000JNJG_VANPO:0.0837134)0.99985:0.034268)0.99985:0.0430787)0.998837:0.0208369)0.99985:0.0196212,(Phy000457W_CANGA:0.0711854,(Phy004F2YU_588726:0.0564193,(Phy003ET83_SACBA:0.0412039,Phy000CX4H_YEAST:0.0312003)0.99985:0.0837373)0.947318:0.0223552)0.941307:0.00984725)0.99985:0.011665)0.99985:0.0192451,(Phy004FH1A_KAZAF:0.0907382,(Phy000CVMU_YEAST:0.0230885,Phy000NM19_SACBA:0.0378338)0.99985:0.077243)0.993676:0.0240291)0.99985:0.0203553,(Phy00244KO_ZYGRO:0.227036,(Phy000NT8F_SACCA:0.0706802,Phy004FLUW_NAUDC:0.102082)0.99985:0.0400108)0.951593:0.0156376)0.821965:0.0142286)0.99985:0.0555068)0.995297:0.0215114)0.99985:0.0617542)0.99985:0.0766563)0.99985:0.0391873)0.99985:0.0512995)0.868152:0.00804878)0.986886:0.0281588)0.895443:0.0194272)0.99985:0.201861)0.987571:0.16679)0.99985:3.18348)0.99985:0.571344)0.871722:0.0680403)0.99985:0.176123)0.99985:0.0800853)0.99985:0.182843,(Phy004F7V6_1071379:1.13573,(Phy003M25Z_51660:1.38478,Phy003LWAK_51914:1.88325)0.99985:0.607834)0.985457:0.149056)0.99985:0.0802184,((Phy004FDRT_TETPH:0.413917,Phy000JMLE_VANPO:0.43574)0.99985:0.102264,(Phy004FLX8_NAUDC:0.23091,Phy000NSTN_SACCA:0.23412)0.99985:0.102889)0.337602:0.0337093)0.99985:0.0474337)0.924651:0.0456035)0.99985:0.0507224)0.99985:0.102691);"
+    
+        tree = Tree(tree_string)
+    
+        #Extract only leaves that are are WGH_branch_seed, KLE_branch_seed, ZT_branch seed 
+        leaf_names = tree.get_leaf_names()
+        leaf_subset = [name for name in leaf_names if name.split('_')[1] in {WGH_branch_seed,KLE_branch_seed,ZT_branch_seed}]
+    
+        #print(leaf_subset)
+    
+        #Check for 1-2 WGH proteins and only 1 each of KL and ST branch
+        leaf_subset_spec = [name.split("_")[1] for name in leaf_subset]
+        leaf_subset_spec_counter = Counter(leaf_subset_spec)
+        
+        for branch_seed in [KLE_branch_seed,ZT_branch_seed]:
+            if (leaf_subset_spec_counter[branch_seed]>1):
+                #Throw out extra WGH branch gene if children of common ancestor between it and current gene are in an outgroup.  
+    
+                #Prune down tree to include spec of interest and outgroups
+                leaf_subset_outgroups = [name for name in leaf_names if name.split('_')[1] in set([WGH_branch_seed,KLE_branch_seed,ZT_branch_seed] + outgroups)]
+                tree.prune(leaf_subset_outgroups) 
+                #print(tree)
+                #for each of the branch genes. 
+                branch_genes = [leaf for ind,leaf in enumerate(leaf_subset) if leaf_subset_spec[ind]==branch_seed]
+                for branch_gene in branch_genes:
+                    ancestor = tree.get_common_ancestor([gene,branch_gene])
+                    ancestor_leaves = ancestor.get_leaf_names()
+                    ancestor_leaves_spec = [name.split("_")[1] for name in ancestor_leaves]
+    
+                    #if the leaves of the parent node include an outgroup, throw out the gene
+                    if len(set(ancestor_leaves_spec) & set(outgroups)) > 0:
+                        if verbose: 
+                            print('Threw out ' + branch_gene + ' because outgroup gene between it and seed')
+                        leaf_subset.remove(branch_gene)    
+                        leaf_subset_spec = [name.split("_")[1] for name in leaf_subset]
+                        leaf_subset_spec_counter = Counter(leaf_subset_spec)
+    
+                    if  (leaf_subset_spec_counter[branch_seed]==0):
+                        if verbose: 
+                            print('Alert threw out both ' + branch_seed + ' genes for seed: ' + gene)
+    
+        if (leaf_subset_spec_counter[KLE_branch_seed]==1) & (leaf_subset_spec_counter[WGH_branch_seed] > 0) & (leaf_subset_spec_counter[ZT_branch_seed]==1):
+    
+            #if 2 or more S.Cer proteins, remove any other paralogs from the leaf subset
+            if leaf_subset_spec_counter[WGH_branch_seed]>1:
+                if leaf_subset_spec_counter[WGH_branch_seed]>2:
+                    if verbose: 
+                        print(gene + " has more than 2 paralogs")
+                        print(leaf_subset)
+                not_scer = [spec != WGH_branch_seed for spec in leaf_subset_spec]
+                is_gene = [leaf == gene for leaf in leaf_subset]
+                is_gene_or_not_scer = [ig or ns for ig,ns in zip(is_gene, not_scer)]
+                leaf_subset = [gene for gene,cond in zip(leaf_subset,is_gene_or_not_scer) if cond]
+    
+            tree.prune(leaf_subset)  
+            children = [child.name for child in tree.get_children()]
+            if len(children)==2:
+                children.remove('')
+                distant_child = children[0]
+                distant_child_spec = distant_child.split("_")[1]
+                topology = topology_dict[distant_child_spec]
+            elif len(children)==3:
+                if verbose: 
+                    print("three children for " + gene + ", assume topology D, leaf subset =")
+                    print(leaf_subset)
+                topology = "D"
+            else: 
+                if verbose: print("Something must be wrong: " + gene)
+        elif (leaf_subset_spec_counter[KLE_branch_seed]==1) & (leaf_subset_spec_counter[WGH_branch_seed] > 0) & (leaf_subset_spec_counter[ZT_branch_seed]==0):
+            if verbose: 
+                print(gene + " missing " + ZT_branch_seed + " protein")
+                print(leaf_subset)
+            topology = "missing " + ZT_branch_seed + " protein"
+        elif (leaf_subset_spec_counter[KLE_branch_seed]==0) & (leaf_subset_spec_counter[WGH_branch_seed] > 0) & (leaf_subset_spec_counter[ZT_branch_seed]==1):
+            if verbose: 
+                print(gene + " missing " + KLE_branch_seed + " protein")
+                print(leaf_subset)
+            topology = "missing " + KLE_branch_seed + " protein"
+        elif (leaf_subset_spec_counter['KLULA']==0) & (leaf_subset_spec_counter[WGH_branch_seed] > 0) & (leaf_subset_spec_counter[ZT_branch_seed]==0):
+            if verbose: 
+                print(gene + " missing " + ZT_branch_seed + " and " + KLE_branch_seed + " protein")
+                print(leaf_subset)
+            topology = "missing " + ZT_branch_seed + " and " + KLE_branch_seed + " protein"
+        else: 
+            if verbose: 
+                print("non-standard phylogeny for " + gene + ", leaf subset =")
+                print(leaf_subset)
+            topology = "under construction"
+    
+    
+        topologies.append(topology)
+    
+    return(topologies)
