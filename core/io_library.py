@@ -346,14 +346,15 @@ def read_gasch_data(conditions,fname):
     
     return exp_df
 
-def parse_data_series_matrix_SC(desired_conditions, data_processing_dir, GEO_accession):
+def parse_data_series_matrix_SC(desired_conditions, data_dir, GEO_accession):
     #Extracts data for desired conditions from a series matrix file for S.Cerevisiae
     #Extract dictionary for each gene from family.soft file
     #Desired condition is a list of tuples, 
     #   the first entry is the name you want to have for your columns (need not match file)
     #   the second entry is the array designator (should match file)
-    series_fname = GEO_accession + '_series_matrix.txt'
-    soft_fname = os.path.normpath(data_processing_dir + GEO_accession + '_family.soft' )
+    
+    #Extract dictionary for each gene from family.soft file
+    soft_fname = os.path.normpath(data_dir + GEO_accession + '_family.soft' )
     with open(soft_fname) as f:
         for line in f: 
             if line.split()[0] == '!platform_table_begin':
@@ -376,12 +377,14 @@ def parse_data_series_matrix_SC(desired_conditions, data_processing_dir, GEO_acc
                 orf_name = linesp[orf_header_ind]
                 platform_dict[orf_ind] = orf_name  
 
-    #Find line that starts table listing gene names and index numbers
-
-    series_fname = os.path.normpath(data_processing_dir + series_fname)
+    
+    
+    #Extracts data for desired conditions from a series matrix file for S.Cerevisiae
+    series_fname = os.path.normpath(data_dir + GEO_accession + '_series_matrix.txt')
     #GSM1423542: nmpp1 treatment (20 min) - ACY142 +nmpp1 / ACY142
 
     with open(series_fname) as f:
+        #Find line that starts table listing gene names and index numbers
         for line in f: 
             if line.split('\t')[0] == '!series_matrix_table_begin\n':
                 break
@@ -600,6 +603,8 @@ def SC_common_name_lookup(gene_list):
 
 def SC_orf_lookup_by_name(name_list):
     #Input is a list of common names, output is a list of orfs
+    #would be nice if this worked with a single string as well as a list 
+    #e.g. 'ERV14' as well as ['ERV14']
     
     SC_orfs_lookup, SC_common_name_lookup, SC_features_lookup = read_SGD_features()
     sc_genenames = []
