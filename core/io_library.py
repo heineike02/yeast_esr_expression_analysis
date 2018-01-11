@@ -629,8 +629,8 @@ def build_motif_dict(fname = data_processing_dir + os.path.normpath('motifs/JASP
                     motif_dict[line.split()[1]]=line.split()[2]
     return motif_dict
 
-def write_ame_promoter_file(promoter_database, gene_list,fname):
-        
+def write_promoter_file(promoter_database, gene_list,fname):
+    #Changed name from write_ame_promoter_file to write_promoter_file 10JAN18    
     with open(fname,'w') as f: 
         for gene in gene_list:
             try: 
@@ -726,8 +726,19 @@ def run_ame_analysis(spec, target_gene_list, control_gene_list,target_fname_pref
     return
 
 
-
-
+#def run_meme_analysis(input_promoters_fname, background_promoters_fname):
+#
+#    pspgen_command = [ "/home/kieran/meme/bin/ame",
+#                   "--verbose", "2",
+#                   "--oc", output_dir,
+#                   "--control", control_sequences,
+#                   "--bgformat", "1", 
+#                   "--scoring", ame_scoring,
+#                   "--method", ame_method, 
+#                   "--pvalue-report-threshold", ame_pvalue_threshold, 
+#                   target_sequences,
+#                   motif_db]
+    
 def make_foldchange_subsets(kl_sc_PKA_data, pthreshold_KL, pthreshold_SC): 
     #Highlight hits that are statistically significant for K.Lactis and S. Cerevisiae and breaks them down into activated and 
     #repressed for each group. 
