@@ -289,6 +289,22 @@ def read_SGD_features():
        
     return SC_orfs_lookup, SC_genename_lookup, SC_features_lookup
 
+def get_sgd_description(sc_genename_list):
+    SGD_features = read_SGD_features()
+    description_dict = SGD_features[2]
+
+    description_list = []
+    for gene in sc_genename_list:
+        try: 
+            description = description_dict[gene]
+        except KeyError: 
+            print('description lookup failed for ' + gene)
+            description = "Lookup Failed"
+        description_list.append(description)
+    
+    return description_list
+
+
 def read_orth_lookup_table(species1, species2, orth_dir):
     #For a given species read in the ortholog file, make a dictionary
     orth_file_abbrev = {'Kluyveromyces lactis': 'Klac', 'Saccharomyces cerevisiae': 'Scer', 'Candida glabrata':'Cgla', 'Saccharomyces castellii' : 'Scas', 'Saccharomyces bayanus' : 'Sbay'}
@@ -929,6 +945,16 @@ def go_term_enrichment(gene_set_list, background_genes, go_term_list, go_slims_a
     
     return go_term_enrichment
 
+def go_terms_by_gene(sc_genename_list): 
+    GO_aspect = 'P'
+    go_slims_aspect, go_term_list = load_goslim_data(GO_aspect)
+
+    go_term_list = []
+    for gene in sc_genename_list:
+        go_term_list.append(", ".join(list(go_slims_aspect[go_slims_aspect['sc_genename'] == gene].loc[:,'GO_term'])))
+
+    return go_term_list
+
 def make_meme_promoter_files(gene_list, fname_prefix, spec_comparision_data): 
 
     #Read in the KL promoter database.  
@@ -1217,6 +1243,23 @@ def build_phylo_conversion_sc():
                         break
 
     return
+
+def get_phylomedb_name(sc_genename_list):
+    sc_phylomedb_convert = pd.read_table(data_processing_dir + os.path.normpath("phylogenetic_trees/sc_id_conversion.txt"), header=None)
+    sc_phylomedb_convert.columns = ["phylomedb_name","sc_genename"]
+
+    phylomedb_list = []
+
+    for gene in sc_genename_list:
+        phylomedb_matches = sc_phylomedb_convert[sc_phylomedb_convert['sc_genename']==gene]['phylomedb_name']
+        if len(phylomedb_matches) == 1:
+            phylomedb_name = phylomedb_matches.values[0]
+        elif len(phylomedb_matches) == 0:
+            print('No match for ' + gene + ' in phylome namespace')
+            phylomedb_name = None
+        phylomedb_list.append(phylomedb_name)
+    
+    return phylomedb_list
 
 def build_phylo_conversion_kl():
     #builds file for name conversion from phylome_db tree files for K.Lactis genes. 
