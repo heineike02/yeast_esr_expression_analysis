@@ -1,3 +1,4 @@
+#to keep my scripts consistent, I am adding this to the top of all scripts with %load std_libraries.py
 import sys
 #Indicate operating environment and import core modules
 location_input = input("what computer are you on? a = Bens, b = gpucluster, c = other   ")
@@ -52,3 +53,6 @@ if online_input == "Yes":
     import plotly.tools as pytools
     py.sign_in('heineike02_student','9dMTMZgJMgUP0YX0P5mQ')
     #py.sign_in('heineike02', 'APPjKrtARaN2ZgUYIkqr')
+    
+# for phylogenetic trees: 
+# from ete3 import Tree
