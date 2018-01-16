@@ -1381,6 +1381,116 @@ def assign_topologies(trees, WGH_branch_seed, KLE_branch_seed, ZT_branch_seed, o
     
     return(topologies)
 
+def assign_single_topology(gene,leaf_subset,tree, KLE_branch_seed, WGH_branch_seed, ZT_branch_seed, verbose):
+    topology_dict = {WGH_branch_seed: "C", KLE_branch_seed: "A", ZT_branch_seed:"B"}
+    leaf_subset_spec = [name.split("_")[1] for name in leaf_subset]
+    leaf_subset_spec_counter = Counter(leaf_subset_spec)
+
+    #if (leaf_subset_spec_counter[KLE_branch_seed]==1) & (leaf_subset_spec_counter[WGH_branch_seed] in {1,2}) & (leaf_subset_spec_counter[ZT_branch_seed]==1):
+    if (leaf_subset_spec_counter[KLE_branch_seed]==1) & (leaf_subset_spec_counter[ZT_branch_seed]==1):
+        #If there is 1 KLE, 1 ZT and 1 or 2 WGH, 
+        #Check for topology for low and high
+        #prune tree to three leaves 
+        tree_three_leaf = tree.copy()
+        
+        tree_three_leaf.prune(leaf_subset)  
+        children = [child.name for child in tree_three_leaf.get_children()]
+        if len(children)==2:
+            #remove '' because that is an internal node.
+            children.remove('')  
+            distant_child = children[0]
+            distant_child_spec = distant_child.split("_")[1]
+            #topology is assigned based on which of the three leaves are most distant. 
+            topology_out = topology_dict[distant_child_spec]
+        elif len(children)==3:
+            if verbose: 
+                print("three children for " + gene + ", assume topology D, leaf subset =")
+                print(leaf_subset)
+            topology_out = "D"
+        else: 
+            if verbose: 
+                print("Something must be wrong: " + gene) 
+    elif (leaf_subset_spec_counter[KLE_branch_seed]==0) & (leaf_subset_spec_counter[ZT_branch_seed]==0):
+        if verbose: 
+            print(gene + " missing " + ZT_branch_seed + " and " + KLE_branch_seed + " protein")
+        topology_out = "missing " + ZT_branch_seed + " and " + KLE_branch_seed + " protein"
+    elif leaf_subset_spec_counter[ZT_branch_seed]==0:
+        if verbose: 
+            print(gene + " missing " + ZT_branch_seed + " protein")
+        topology_out = "missing " + ZT_branch_seed + " protein"
+    elif (leaf_subset_spec_counter[KLE_branch_seed]==0):
+        if verbose: 
+            print(gene + " missing " + KLE_branch_seed + " protein")
+        topology_out = "missing " + KLE_branch_seed + " protein"
+    else: 
+        if verbose: 
+            print("non-standard phylogeny for " + gene + ", leaf subset =")
+            print(leaf_subset)
+        topology_out = "under construction"
+    
+    return topology_out
+
+
+def assign_joint_topology(genes, leaf_subset, tree, single_topologies, paralog_labels, sc_genes, KLE_branch_seed, WGH_branch_seed, ZT_branch_seed, verbose):
+    
+    leaf_subset_spec = [name.split("_")[1] for name in leaf_subset]
+    leaf_subset_spec_counter = Counter(leaf_subset_spec)
+    
+    branch_timing_check_dict = {"A": [ZT_branch_seed], "B": [KLE_branch_seed], "C": [ZT_branch_seed, KLE_branch_seed]}
+    #In an N-N2 topology a late brancher is more closely related to the other species designated by this dictionary
+    #than its paralog is.    
+
+    #Make sure topology of either case is not a pathological case. 
+    pathological_cases = {"missing " + ZT_branch_seed + " protein", 
+                         "missing " + KLE_branch_seed + " protein",
+                         "missing " + ZT_branch_seed + " and " + KLE_branch_seed + " protein",
+                         "under construction",
+                         None, 
+                        "D"}
+
+    topology_updated = single_topologies
+
+    if len( {single_topologies[label] for label in paralog_labels}  & pathological_cases) > 0:
+        joint_topology_out = 'pathological'
+    elif single_topologies[paralog_labels[0]] != single_topologies[paralog_labels[1]]:
+        joint_topology_list = list(single_topologies.values()) 
+        joint_topology_list.sort()
+        joint_topology_out = '-'.join(joint_topology_list)
+    else: 
+        sister_check = len(tree.get_common_ancestor(list(genes.values())).get_leaf_names()) 
+        if sister_check == 2:    #If two WGH genes are most closely related to one another it is a 1 topology 
+            joint_topology_out = single_topologies[paralog_labels[0]] + '-' + single_topologies[paralog_labels[1]] + '1'
+            #both single topologies should be the same, but use different labels anyway.  If a see something like A-B1 I will know 
+            #that is an issue. 
+        elif sister_check in {3,4}: #2 topologies
+            joint_topology_out = single_topologies[paralog_labels[0]] + '-' + single_topologies[paralog_labels[1]] + '2'
+
+            #determine which paralog branched early or late.  late brancher is sister with other species.
+            shared_topology = single_topologies[paralog_labels[0]]
+            if shared_topology != single_topologies[paralog_labels[1]]:
+                print('bad logic in joint topology assignment ' + str(sc_genes))
+            for label in paralog_labels:
+                #use early_branch_check_dict to look up the branch/branches that are closest to the WGH genes. 
+                branch_timing_check_list = [leaf for ind, leaf in enumerate(leaf_subset) if leaf_subset_spec[ind] in branch_timing_check_dict[shared_topology]]
+                #add in the gene we are testing
+                branch_timing_check_list = branch_timing_check_list + [genes[label]]
+                #late brancher if SC gene is more closely related to other group than its paralog
+                if len(tree.get_common_ancestor(branch_timing_check_list).get_leaf_names()) == len(branch_timing_check_list):
+                    #the length of the list of leaves is the same as the check list so this gene is more closely related than 
+                    #its paralog and it is a late brancher
+                    topology_updated[label] = single_topologies[label] + '_late'
+                elif len(tree.get_common_ancestor(branch_timing_check_list).get_leaf_names()) == len(branch_timing_check_list)+1: 
+                    #the length of the list of leaves is one longer than the check list so it must now include the other paralog. 
+                    #this gene is therefore the early brancher. 
+                    topology_updated[label] = single_topologies[label] + '_early'
+                else:
+                    print("problem :early branch check broken " + str(branch_timing_check_list))
+        else:
+            print('something went wrong ' + sc_genes[paralog_labels[0]] + ' ' + sc_genes[paralog_labels[1]] + ' sister check = ' + str(sister_check))
+            print(tree)
+     
+    return joint_topology_out, topology_updated
+
 def joint_topology_type(joint_topology): 
     joint_topologies_gene_conv = {'A-A1','B-B1','C-C1','C-C2'}
     joint_topologies_diff_lineages = {'A-A2','B-B2','A-C','A-B','B-C'}
