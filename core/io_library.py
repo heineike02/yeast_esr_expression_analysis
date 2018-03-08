@@ -13,6 +13,8 @@ import matplotlib.pyplot as plt
 from Bio.Seq import Seq
 from Bio.Alphabet import generic_dna
 from ete3 import Tree
+import requests
+from lxml import etree    #parses xml output
 
 #Indicate operating environment and import core modules
 location_input = input("what computer are you on? a = Bens, b = gpucluster, c = other   ")
@@ -29,11 +31,13 @@ def tryfloatconvert(value, default):
         return default
 
 def parse_raw_exp(species):
-    #Parses raw expression data for a given species.  Ouputs a dataframe and saves a .csv file. 
+    #Parses raw expression data for a given species.  Ouputs a dataframe. 
     #org_dict = {'Kluyveromyces lactis': ('GSE22198_family.soft','SystematicName','KLac',KL_soft_alt_dict), 'Saccharomyces cerevisiae': ('GSE22204_family.soft','ACCESSION_STRING','SCer',SC_soft_alt_dict)}
-    raw_exp_datasets = {'Kluyveromyces lactis': 'GSE22198_family.soft', 'Saccharomyces cerevisiae': 'GSE22204_family.soft', 'Candida glabrata':'GSE22194_family.soft', 'Saccharomyces castellii' : 'GSE22200_family.soft', 'Saccharomyces bayanus' : 'GSE22205_family.soft'}
+    raw_exp_datasets = {'Kluyveromyces lactis': 'GSE22198_family.soft', 'Saccharomyces cerevisiae': 'GSE22204_family.soft', 'Candida glabrata':'GSE22194_family.soft', 'Naumovozyma castellii' : 'GSE22200_family.soft', 'Saccharomyces bayanus' : 'GSE22205_family.soft', 'Saccharomyces mikatae': 'GSE22201_family.soft', 'Lachancea waltii': 'GSE22199_family.soft', 'Saccharomyces paradoxus': 'GSE22193_family.soft', 'Lacancea kluyverii': 'GSE22202_family.soft', 'Debaryomyces hansenii': 'GSE22191_family.soft'}
     #raw_exp_fnames = {'Kluyveromyces lactis': 'KLac_raw.csv', 'Saccharomyces cerevisiae': 'SCer_raw.csv'}
-    orf_header_names = {'Kluyveromyces lactis': 'SystematicName', 'Saccharomyces cerevisiae': 'ACCESSION_STRING', 'Candida glabrata':'SystematicName', 'Saccharomyces castellii' : 'SystematicName', 'Saccharomyces bayanus' : 'SystematicName'}
+    orf_header_names = {spec : 'SystematicName' for spec in ['Kluyveromyces lactis', 'Candida glabrata', 'Naumovozyma castellii', 'Saccharomyces bayanus', 'Saccharomyces mikatae', 'Lachancea waltii', 'Saccharomyces paradoxus','Debaryomyces hansenii']}
+    orf_header_names['Saccharomyces cerevisiae']='ACCESSION_STRING'
+    orf_header_names['Lacancea kluyverii'] = 'Gene'
     
     #data cleaning notes: 
     #Kluyveromyces Lactis: No expression value listed - made NA
@@ -47,7 +51,7 @@ def parse_raw_exp(species):
     #Did not need to clean data for other species - made an if loop to catch it. 
     
     #KLac had four samples    
-    input_fname = os.path.normpath(data_processing_dir + '/raw_exp/' + raw_exp_datasets[species])
+    input_fname = os.path.normpath(data_processing_dir + 'regev_data/raw_exp/' + raw_exp_datasets[species])
     with open(input_fname) as f:
         # identify samples in the dataset
         # Skips text before the line that says beginning of the interesting block:
@@ -71,7 +75,7 @@ def parse_raw_exp(species):
                 break
         
         #Find index of header that will identify orf
-        line = f.next()
+        line = next(f)
         linesp = line.split()
         orf_header_ind = linesp.index(orf_header_names[species])
         
@@ -112,7 +116,7 @@ def parse_raw_exp(species):
                     break 
             
             #skip header line
-            f.next()
+            next(f)
             for line in f: 
                 linesp = line.split()
                 if linesp[0] == '!sample_table_end':
@@ -143,9 +147,9 @@ def parse_micro_data(species, exptype, orf_lookup):
     #load raw data for a given species/experiment type pair.  Third argument is an orf lookup table
     #which is a from parse_raw_exp
     exptype_prefixes = {'Growth': '36253', 'Stress': '38478'}
-    platform_prefixes = {'Kluyveromyces lactis': '10499', 'Saccharomyces cerevisiae': '9294', 'Candida glabrata':'10497', 'Saccharomyces castellii' : '10501', 'Saccharomyces bayanus' : '10505'}
+    platform_prefixes = {'Kluyveromyces lactis': '10499', 'Saccharomyces cerevisiae': '9294', 'Candida glabrata':'10497', 'Naumovozyma castellii' : '10501', 'Saccharomyces bayanus' : '10505', 'Saccharomyces mikatae': '10502', 'Lachancea waltii': '10500', 'Saccharomyces paradoxus': '10496', 'Lacancea kluyverii': '10503', 'Debaryomyces hansenii': '15298', 'Vanderwaltozyma polyspora': '15297' }
     
-    input_fname = os.path.normpath(data_processing_dir + '/GSE' + exptype_prefixes[exptype] + '_' + exptype + '/GSE'+ exptype_prefixes[exptype] + '-GPL' + platform_prefixes[species] + '_series_matrix.txt')
+    input_fname = os.path.normpath(data_processing_dir + '/regev_data/GSE' + exptype_prefixes[exptype] + '_' + exptype + '/GSE'+ exptype_prefixes[exptype] + '-GPL' + platform_prefixes[species] + '_series_matrix.txt')
     with open(input_fname) as f:
         if exptype == 'Growth': 
             
@@ -209,15 +213,15 @@ def parse_micro_data(species, exptype, orf_lookup):
         
         #build dataframe from expdata_ungrouped
         expdata = pd.DataFrame.from_dict(expdata_ungrouped, orient = 'index')
-        #sort ids alphanumerically
-        expdata = expdata.sort()
+        #sort ids alphanumerically (not sure whether this is necessary)
+        expdata.sort_index(axis=0, inplace=True)
         #Sets a multi index for conditions and replicates
         col_mindex_arrays = [conditions,replicates,condition_ids]
         col_mindex_tuples = list(zip(*col_mindex_arrays))
         col_mindex = pd.MultiIndex.from_tuples(col_mindex_tuples, names=['conditions', 'replicates','array_ids'])
         expdata.columns = col_mindex
         #sort by conditions
-        expdata_sorted = expdata.sortlevel('conditions',axis = 'columns')
+        expdata_sorted = expdata.sort_index(level = 'conditions',axis = 'columns')
         #add in index of gene names (maybe have multi-index or just replace id numbers)
         if False in (expdata_sorted.index == orf_lookup.index):
             print("Error: ID mismatch between experiment data and orf lookup table. Species = {}, Experiment Type = {}".format(species, exptype))
@@ -240,36 +244,65 @@ def parse_micro_data(species, exptype, orf_lookup):
 
 def make_data_tables(species_list,fname_out_bases, base_dir):
     
-    for jj in range(len(species_list)): 
+    for jj,spec in enumerate(species_list):  
     
-        #Generate raw expression data
-        raw_exp, orf_lookup = parse_raw_exp(species_list[jj])
-        
-        #save raw expression data to a csv file
-        # Gabe 7/12/16
-        # fname = os.path.normpath(base_dir + "\microarray_data\\raw_exp\\"  + fname_out_bases[jj] + '_raw_exp.csv')
-        fname = os.path.normpath(base_dir + "/expression_data/raw_exp/"  + fname_out_bases[jj] + '_raw_exp.csv')
-        raw_exp.to_csv(fname)
-        print(fname + ' saved')
+        if spec != 'Vanderwaltozyma polyspora':     #Vpol doesn't have raw expression data
+            #Generate raw expression data
+            raw_exp, orf_lookup = parse_raw_exp(spec)
+
+            #save raw expression data to a csv file
+            fname = os.path.normpath(data_processing_dir + "regev_data/raw_exp/"  + fname_out_bases[jj] + '_raw_exp.csv')
+            raw_exp.to_csv(fname)
+            print(fname + ' saved')
+        elif spec == 'Vanderwaltozyma polyspora':    #still need an orf lookup.  perhaps should do them all with these tables. 
+            array_table = pd.read_table(data_processing_dir+os.path.normpath('regev_data/Vpol_array_table.txt'), dtype = 'str')
+            orf_lookup = array_table.loc[:,['ID','ORF']].set_index('ID').squeeze()
         
         #Generate data for microarrays
-        growth_exp = parse_micro_data(species_list[jj],'Growth',orf_lookup)
-        # Gabe 7/12/16
-        # fname = os.path.normpath(base_dir + "\microarray_data\\GSE36253_Growth\\"  + fname_out_bases[jj] + '_growth.csv' )
-        fname = os.path.normpath(base_dir + "/expression_data/GSE36253_Growth/"  + fname_out_bases[jj] + '_growth.csv' )
+        growth_exp = parse_micro_data(spec,'Growth',orf_lookup)
+        fname = os.path.normpath(data_processing_dir + "regev_data/GSE36253_Growth/"  + fname_out_bases[jj] + '_growth.csv' )
         growth_exp.to_csv(fname)
         print(fname + ' saved')
         
-        if species_list[jj] != 'Saccharomyces bayanus':
-            #There is no stress dataset for S. bayanus
+        if not(spec in {'Saccharomyces bayanus','Saccharomyces mikatae','Saccharomyces paradoxus', 'Lacancea kluyverii','Debaryomyces hansenii','Vanderwaltozyma polyspora'}):
+            #There is no stress dataset for these species
             stress_exp = parse_micro_data(species_list[jj],'Stress',orf_lookup)
-            # Gabe 7/12/16
-            # fname = os.path.normpath(base_dir + "\microarray_data\\GSE38478_Stress\\"  + fname_out_bases[jj] + '_stress.csv' )
-            fname = os.path.normpath(base_dir + "/expression_data/GSE38478_Stress/"  + fname_out_bases[jj] + '_stress.csv' )
+            fname = os.path.normpath(data_processing_dir + "regev_data/GSE38478_Stress/"  + fname_out_bases[jj] + '_stress.csv' )
             stress_exp.to_csv(fname)
             print(fname + ' saved')
     
     return 
+
+def combine_growth_stress_datasets(species):
+    #species can be SCer, CGla, SCas, KLac.  No stress dataset for SBay 
+    fname = os.path.normpath(data_processing_dir + "regev_data/GSE36253_Growth/"  + species + '_growth.csv' )
+    growth_exp = pd.read_csv(fname,header = [0,1,2], index_col = [0,1])
+    print(fname + ' growth microarray dataset loaded')
+
+    #group by conditions and take mean
+    growth_replicate_groups = growth_exp.groupby(axis = 1, level = 'conditions')
+    growth_exp_avg = growth_replicate_groups.aggregate(np.mean)
+
+    fname = os.path.normpath(data_processing_dir + "regev_data/GSE38478_Stress/"  + species + '_stress.csv' )
+    stress_exp = pd.read_csv(fname,header = [0,1,2], index_col = [0,1])
+    print(fname + ' stress microarray dataset loaded')
+
+    #group by condition and take mean
+    stress_replicate_groups = stress_exp.groupby(axis = 1, level = 'conditions')
+    stress_exp_avg = stress_replicate_groups.aggregate(np.mean)
+
+    #combine growth and stress average expression datasets. 
+    if False in stress_exp_avg.index==growth_exp_avg.index:
+        print("Error: ID mismatch between condition data. Species = {}".format(species))
+    growth_stress_data = pd.concat([growth_exp_avg,stress_exp_avg], axis = 1)
+
+    #gets rid of ID index
+    growth_stress_data.reset_index(level=0, inplace=True)
+    fname_out = os.path.normpath(data_processing_dir + 'regev_data/' + species + '_growth_stress.csv')  
+    growth_stress_data.to_csv(fname_out)
+    print('combined dataset saved as ' + fname_out )
+
+    return growth_stress_data
     
 def read_SGD_features():
     
@@ -306,10 +339,12 @@ def get_sgd_description(sc_genename_list):
 
 
 def read_orth_lookup_table(species1, species2, orth_dir):
+    #ensure orth_dir has a separator at the end of it.
     #For a given species read in the ortholog file, make a dictionary
-    orth_file_abbrev = {'Kluyveromyces lactis': 'Klac', 'Saccharomyces cerevisiae': 'Scer', 'Candida glabrata':'Cgla', 'Saccharomyces castellii' : 'Scas', 'Saccharomyces bayanus' : 'Sbay'}
-    orth_fname = orth_file_abbrev[species1] + "-" + orth_file_abbrev[species2] + "-orthologs.txt"
-    orth_fname = os.path.normpath(orth_dir + os.sep + orth_fname)
+    #formerly used the full name of the species, but 2/20/2018 switched to using four letter abbreviations. 
+    #orth_file_abbrev = {'Kluyveromyces lactis': 'Klac', 'Saccharomyces cerevisiae': 'Scer', 'Candida glabrata':'Cgla', 'Saccharomyces castellii' : 'Scas', 'Saccharomyces bayanus' : 'Sbay'}
+    orth_fname = species1 + "-" + species2 + "-orthologs.txt"
+    orth_fname = os.path.normpath(orth_dir + orth_fname)
     
     #There are some orfs that have multiple orthologs - in that case both will be used
     with open(orth_fname) as f:
@@ -334,19 +369,45 @@ def get_gasch_ESR_list(act_rep):
             out.append(linesp[0])
 
     return out
-    
+
+def all_gasch_conditions(fname):
+    #returns a list of all the conditions in the Gacsch data set
+    #
+    #two main options for fname are 
+    #  gasch_complete_dataset.txt
+    #  gasch_fig1_all_conditions.txt
+        
+    fname_full = os.path.normpath(data_processing_dir + "/gasch_data/" + fname)
+    with open(fname_full) as f:
+        conditions = next(f).split("\t")
+    #remove newline from final condition
+    conditions[-1] = conditions[-1].strip('\n')
+    #remove items that are not conditions
+    conditions = [condition for condition in conditions if not(condition in {'GID','UID','NAME','GWEIGHT',''})]
+    return conditions
+
 def read_gasch_data(conditions,fname):
     #For selected conditions from the Gasch 2000 supplement, extract the data as 
     #a dataframe with a row for each gene and each column a condition
+    #possible conditions are given by the function all_gasch_conditions()
+    #
+    #You must choose a data file to extract the data from.  
+    #The data in gasch_complete_dataset.txt is not "zero-transformed" per the paper to reflect expression v.s. no condition
+    #usually it is expression v.s. a reference pool of all similar conditions. 
+    #
+    #The data in i.e. gasch_fig1_all_conditions.txt is zero transformed (per the figures) except for the
+    #carbon sources which are v.s. a reference pool. 
     
     if fname == "gasch_complete_dataset.txt":
         gene_ind = 0
-    else: 
+    else:      # This is for when we use the data from the figure.  It has an extra E-weight row - not sure what that is for.  
         gene_ind = 1
     fname_full = os.path.normpath(data_processing_dir + "/gasch_data/" + fname)
     
     with open(fname_full) as f:
         header = next(f).split("\t")
+        #remove newline from final condition in header
+        header[-1] = header[-1].strip('\n')
         condition_inds = [header.index(condition) for condition in conditions]
         #Skips first two lines
         next(f)
@@ -636,6 +697,149 @@ def SC_orf_lookup_by_name(name_list):
     
     return sc_genenames
 
+def get_species_from_gene(gene, species_info):
+    #extracts species for a given gene name: 
+    #loop through species that have a prefix
+    
+    gene_spec = ''    
+    for row in species_info[~species_info['ygob_gene_prefix'].isna()].loc[:,['ygob_gene_prefix','abbreviation']].itertuples():
+        prefix = row.ygob_gene_prefix
+        spec = row.abbreviation
+        #if prefix is not a string, then it should be an np.nan
+        if type(prefix) == str:
+            found = re.findall(prefix,gene)
+            if len(found)==1: 
+                if gene_spec != '':
+                    print('problem - gene had more than one prefix match')
+                gene_spec = spec
+            elif len(found)>1: 
+                print('problem - gene name had more than one match to a prefix')
+    if gene_spec == '':
+        print(gene)
+        #didn't match with a prefix - check Egos and Scer
+        first_letter = gene[0]
+        if first_letter == 'Y':
+            gene_spec = 'Scer'
+        elif first_letter == 'A':
+            gene_spec = 'Egos'
+        else:
+            print('problem - no match with prefix or with Egos and Scer. ' + gene)
+    
+    return gene_spec
+
+def extract_promoter_sequence(gene, prom_length):
+    #extracts promoter sequence from NCBI for a given gene. 
+    
+    species_info = pd.read_csv(os.path.normpath(data_processing_dir + 'promoter_phylogenies/ygob_species_info.csv'))
+       
+    spec = get_species_from_gene(gene, species_info)
+    
+    #Check if the species is in NCBI
+    ncbi_specs = species_info[species_info['in_ncbi']]['abbreviation']
+    full_species_dict = dict(zip(species_info['abbreviation'],species_info['ncbi_name']))
+    
+    if spec in set(ncbi_specs):
+        
+        strand_inds = {"plus":"1","minus":"2"}    
+        
+        #converts gene name from ygob name to name in NCBI
+        if spec == 'Vpol':
+            gene = gene.replace('.','p')
+        if spec == 'Klac':
+            gene = gene[0:5] + '_' + gene[5:]
+        if spec == 'Egos': 
+            gene = 'AGOS_' + gene
+            
+        genus, spec_full = full_species_dict[spec].split(' ')
+        gene_search_url = 'http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=gene&term=(' + gene + '%5BGene%20Name%5D)%20AND%20' + genus + '%20' + spec_full + '%5BOrganism%5D&retmode=json'
+        gene_search_response = requests.get(gene_search_url)
+        
+        if gene_search_response.ok:
+            #verify there is only one search result
+            search_count = gene_search_response.json()['esearchresult']['count']
+            if int(search_count) != 1: 
+                raise ValueError('More or less than one search result for ' + gene + ' count = ' + search_count)
+            entrez_gene_id = gene_search_response.json()['esearchresult']['idlist'][0]
+        else:
+            raise ValueError('Gene search response for ' + gene + ' not ok')
+    
+        # Extract ID fetch data
+        gene_data_url = 'http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=gene&id=' + entrez_gene_id + '&retmode=xml'
+        gene_data_response = requests.get(gene_data_url) 
+        if gene_data_response.ok:
+            gene_data_xml = etree.fromstring(gene_data_response.content)
+            entrezgene_element = gene_data_xml.getchildren()[0]
+            locus_element = entrezgene_element.find('Entrezgene_locus')
+            #check that Entrezgene_locus is not None
+            if locus_element == None: 
+                raise ValueError('Entrezgene_locus not found ' + gene)
+            locus_gene_commentary_list = locus_element.findall("Gene-commentary") 
+            if len(locus_gene_commentary_list) == 1: 
+                locus_gene_commentary = locus_gene_commentary_list[0]
+            else: 
+                print('NCBI has more than one gene commentary elements in the Entrezgene Locus looking for type 1 = genomic')
+                #Keep only the gene commentary that has type = 1 
+                locus_gene_commentary_shortlist = [locus_gene_commentary for locus_gene_commentary in locus_gene_commentary_list if locus_gene_commentary.find("Gene-commentary_type").text=='1']
+                if len(locus_gene_commentary_shortlist) == 1: 
+                    locus_gene_commentary = locus_gene_commentary_shortlist[0]
+                else: 
+                    print('Error - more than one gene commentary listed for genomic dna.  gene = ' + gene)
+            if locus_gene_commentary.find("Gene-commentary_type").text != '1':
+                print('Error - gene commentary type is not 1: genomic dna.  gene = ' + gene)
+            seq_id = locus_gene_commentary.find("Gene-commentary_accession").text
+            seq_ver = locus_gene_commentary.find("Gene-commentary_version").text
+            #it seems that the "Seq-interval_strand" element only exists if it is plus so set default to plus
+            seq_strand = "plus"
+            seq_start = seq_stop = None
+            for element in locus_gene_commentary.find("Gene-commentary_seqs").getchildren()[0].iter():
+                if element.tag == "Seq-interval_from": 
+                    seq_start = str(int(element.text)+1)  #query seems one off from the data in the gene commentary
+                if element.tag == "Seq-interval_to":
+                    seq_stop = str(int(element.text)+1)   #query seems one off from the data in the gene commentary
+                if element.tag == "Seq-interval_strand":
+                    seq_strand = element.getchildren()[0].get("value")
+        else:
+                raise ValueError('Gene Id fetch response for ' + gene + ' not ok.  ID = ' + entrez_gene_id)
+    
+        # extract chromosome sequence number, coordinates and strand.  Save into database. 
+    
+        # Add the operational promoter length to the correct side. 
+        if seq_strand == "plus": 
+            seq_start_new = str(int(seq_start)-prom_length)
+            seq_stop_new = seq_stop
+        elif seq_strand == "minus":
+            seq_start_new = seq_start
+            seq_stop_new = str(int(seq_stop)+prom_length)
+    
+        sequence_query = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nucleotide&id=" + seq_id + "." + seq_ver + "&rettype=fasta&seq_start=" + seq_start_new + "&seq_stop=" + seq_stop_new + "&strand=" + strand_inds[seq_strand] 
+        sequence_data_response = requests.get(sequence_query) 
+        sequence_data = ''.join(sequence_data_response.text.split('\n')[1:-2])
+        #should probably have check here to ensure that I don't parse the sequence output in a bad way - for now assuming it is second line through
+        #the second to last line per the example. 
+    
+        # Add all protein sequences plus promoter sequen
+        promoter_output = (seq_id + "." + seq_ver,[seq_start,seq_stop],seq_strand,sequence_data[0:prom_length],sequence_data[prom_length:])
+    
+    else: 
+        print(gene + ' not in NCBI - no method to get promoter yet')
+        promoter_output = np.nan
+        
+    return spec, promoter_output
+
+def write_promoter_file(promoter_database, gene_list,fname):
+    #Changed name from write_ame_promoter_file to write_promoter_file 10JAN18    
+    with open(fname,'w') as f: 
+        for gene in gene_list:
+            try: 
+                row = promoter_database.loc[gene,]
+                header_line = '>' + row.name + ' ' + str(len(row.prom_seq)) + 'bp_upstream\n'
+                seq_line = row['prom_seq'] + '\n'
+                f.write(header_line)
+                f.write(seq_line)
+            except KeyError: 
+                print(gene + " not in promoter data set.")
+    return
+
 def build_motif_dict(fname = data_processing_dir + os.path.normpath('motifs/JASPAR_CORE_2016_fungi.meme')): 
     motif_dict = {}
     with open(fname,'r') as f: 
@@ -644,21 +848,6 @@ def build_motif_dict(fname = data_processing_dir + os.path.normpath('motifs/JASP
                 if line.split()[0]=='MOTIF':
                     motif_dict[line.split()[1]]=line.split()[2]
     return motif_dict
-
-def write_promoter_file(promoter_database, gene_list,fname):
-    #Changed name from write_ame_promoter_file to write_promoter_file 10JAN18    
-    with open(fname,'w') as f: 
-        for gene in gene_list:
-            try: 
-                row = promoter_database.loc[gene,]
-                header_line = '>' + row.name + ' 700bp_upstream\n'
-                seq_line = row['prom_seq'] + '\n'
-                f.write(header_line)
-                f.write(seq_line)
-            except KeyError: 
-                print(gene + " not in promoter data set.")
-    
-    return
 
 def read_ame_output(fname, motif_dict):
     #reads in ame program output file from meme suits
@@ -756,6 +945,7 @@ def run_ame_analysis(spec, target_gene_list, control_gene_list,target_fname_pref
 #                   motif_db]
     
 def make_foldchange_subsets(kl_sc_PKA_data, pthreshold_KL, pthreshold_SC): 
+    ##would be nice to have option to make thresholds on either padj or log2FoldChange
     #Highlight hits that are statistically significant for K.Lactis and S. Cerevisiae and breaks them down into activated and 
     #repressed for each group. 
     #output is a dictionary which links a gene subset name to a list of genes using the S.Cer orf name. 
@@ -824,21 +1014,26 @@ def make_foldchange_subsets(kl_sc_PKA_data, pthreshold_KL, pthreshold_SC):
     return gene_set_dict
 
 def kl_genename_convert(df): 
+    #probably don't really need this one - just list one below. 
     #Input is dataframe with GFF version of kl genename as the index. 
     #Ouput is dataframe with standard version of kl genename as the index. 
 
+    kl_genename = kl_genename_convert(df.index)
+    df['kl_genename'] = kl_genename
+    df.set_index('kl_genename',inplace = True)
+
+    return df
+
+def kl_genename_convert_list(kl_genes): 
     kl_genename = []
-    for gene in df.index: 
+    for gene in kl_genes: 
         if gene[0:5]=='KLLA0':
             new_gene = gene.split('_')[0]+gene.split('_')[1]
         else: 
             new_gene = gene
         kl_genename.append(new_gene)
-    
-    df['kl_genename'] = kl_genename
-    df.set_index('kl_genename',inplace = True)
 
-    return df
+    return kl_genename
     
 def load_goslim_data(GO_aspect):
     #The three GO_aspect values are: 
@@ -1065,20 +1260,19 @@ def hex_color_dictionary(input_list):
     
     return input_color_dict
 
-def exact_promoter_scan(gene_list, motif_dict, promoter_database): 
+def exact_promoter_scan(gene_list, motif_dict, promoter_database, output_format = 'counts', sequence_context = 0): 
     #finds nonoverlapping exact matches forward and backward for motifs. 
     #input:  motif dictionary, promoter data structure, gene list from dataframe (genes must be primary key of promoter data structure)
-    #output: dataframe with primary key as gene list.  columns are presence of scanned motifs. 
+    #output_format: 'counts'(default) or 'full'.  If 'full' is selected each entry is a list of tuples containing the location of the 
+    #               found motif, and the sequence (with sequence context) of the motif 
+    #sequence_context: default 0.  How many bases on either side of he motif to display in the output. 
+    #output: dataframe with primary key as gene list.  columns are presence of scanned motifs - either counts or location data. 
 
-    n_motifs = []
     output_data_frame = pd.DataFrame(index = gene_list)
 
     for motif_name, motif in motif_dict.items():
         L_motif = len(motif)
-
-
-        n_motifs = []
-
+        output_motif = []
         for gene in gene_list: 
 
             #Make a sequence object
@@ -1087,6 +1281,7 @@ def exact_promoter_scan(gene_list, motif_dict, promoter_database):
 
             #fwd search
             prom_seq_fwd = str(prom_seq)
+            L_prom = len(prom_seq_fwd)
             motif_sites_fwd = [m.start() for m in re.finditer(motif, prom_seq_fwd)]
             #to find overlapping motifs
             #[m.start() fr m in re.finditer('(?=' + motif + ')', prom_seq_rev)]
@@ -1098,11 +1293,29 @@ def exact_promoter_scan(gene_list, motif_dict, promoter_database):
             motif_sites_rev = [len(prom_seq_rev) - m.start() - L_motif for m in re.finditer(motif, prom_seq_rev)]
 
             #This funtion doesn't do anything to locate the sites. 
-            n_motifs_gene = len(motif_sites_fwd) + len(motif_sites_rev)
+            if output_format == 'count':  
+                n_motifs_gene = len(motif_sites_fwd) + len(motif_sites_rev)
+                output_motif.append(n_motifs_gene)
+            elif output_format == 'full': 
+                loc_hitseq_gene = []
+                for motif_site in motif_sites_fwd: 
+                    loc = L_prom-1-motif_site
+                    hitseq = prom_seq_fwd[motif_site-sequence_context:motif_site+L_motif+sequence_context]       
+                    loc_hitseq_gene.append((loc,hitseq))
+                for motif_site in motif_sites_rev: 
+                    loc = L_prom - motif_site+L_motif
+                    hitseq = prom_seq_rev[(L_prom-motif_site-L_motif-sequence_context):(L_prom-motif_site+sequence_context)]
+                    loc_hitseq_gene.append((loc,hitseq))
+                
+                if len(loc_hitseq_gene)==0: 
+                    output_motif.append(None)
+                else:
+                    output_motif.append(loc_hitseq_gene)
+            else: 
+                print("choose output_format: 'count' or 'full' ")
 
-            n_motifs.append(n_motifs_gene)
 
-        output_data_frame[motif_name] = n_motifs
+        output_data_frame[motif_name] = output_motif    
     
     return output_data_frame
 
@@ -1547,3 +1760,25 @@ def joint_topology_type(joint_topology):
         joint_topology_type = None
     
     return joint_topology_type
+
+def consistant_joint_topologies(ortholog_dataset, paralog_labels, resolution):
+    #ortholog_dataset must have joint_topology_A_tree and joint_topology_B_tree columns for paralog labels (A,B) 
+    ind_list = []
+    for ind,row in ortholog_dataset.iterrows(): 
+        joint_topology_A_tree = row['joint_topologies_'+paralog_labels[0]+'_tree']
+        joint_topology_B_tree = row['joint_topologies_'+paralog_labels[1]+'_tree']
+        #Make sure none of the joint topologies are pathological or None
+        if len({None, 'pathological', 'C-outgroup-?'} - {joint_topology_A_tree,joint_topology_B_tree})==3:
+            #check to see if both joint topologies agree
+            if resolution == 'exact':
+                if joint_topology_A_tree==joint_topology_B_tree:
+                    ind_list.append(ind)
+                    #print("{} and {} have matching joint topologies: {} and {} respectively".format(row['SC_common_name_low'],row['SC_common_name_high'],joint_topology['low'],joint_topology['high']))           
+            elif resolution == 'type': 
+                joint_topology_types = {'A':joint_topology_type(joint_topology_A_tree), 
+                                       'B':joint_topology_type(joint_topology_B_tree)}
+                if joint_topology_types['A']==joint_topology_types['B']:
+                    ind_list.append(ind)
+                    #print("{} and {} have similar joint topologies: {} and {} respectively".format(row['SC_common_name_low'],row['SC_common_name_high'],joint_topology['low'],joint_topology['high']))
+
+    return(ind_list)

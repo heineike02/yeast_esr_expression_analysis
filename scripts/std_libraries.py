@@ -27,13 +27,15 @@ data_processing_dir = base_dir + os.sep + os.path.normpath("expression_data") + 
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+#from matplotlib_venn import venn2
 #import seaborn as sns; sns.set(style="ticks", color_codes=True)
 #from sklearn import linear_model
 #import pickle
 #import subprocess
 #import networkx as nx
-# import scipy.stats as stats
-import scipy.cluster.hierarchy as sch
+#import scipy.stats as stats
+#import statsmodels.graphics.gofplots as stats_graph
+#import scipy.cluster.hierarchy as sch
 
 # from Bio import SeqIO
 # from Bio import SeqFeature as sf
@@ -56,3 +58,7 @@ if online_input == "Yes":
     
 # for phylogenetic trees: 
 # from ete3 import Tree
+
+#for scraping internet data (e.g. ncbi)
+#import requests
+#from lxml import etree    #parses xml output
