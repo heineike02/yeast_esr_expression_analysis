@@ -1260,12 +1260,12 @@ def hex_color_dictionary(input_list):
     
     return input_color_dict
 
-def exact_promoter_scan(gene_list, motif_dict, promoter_database, output_format = 'counts', sequence_context = 0): 
+def exact_promoter_scan_genelist(gene_list, motif_dict, promoter_database, output_format = 'counts', sequence_context = 0): 
     #finds nonoverlapping exact matches forward and backward for motifs. 
     #input:  motif dictionary, promoter data structure, gene list from dataframe (genes must be primary key of promoter data structure)
     #output_format: 'counts'(default) or 'full'.  If 'full' is selected each entry is a list of tuples containing the location of the 
     #               found motif, and the sequence (with sequence context) of the motif 
-    #sequence_context: default 0.  How many bases on either side of he motif to display in the output. 
+    #sequence_context: default 0.  How many bases on either side of the motif to display in the output. 
     #output: dataframe with primary key as gene list.  columns are presence of scanned motifs - either counts or location data. 
 
     output_data_frame = pd.DataFrame(index = gene_list)
@@ -1319,6 +1319,59 @@ def exact_promoter_scan(gene_list, motif_dict, promoter_database, output_format 
     
     return output_data_frame
 
+
+def exact_promoter_scan(motif, prom_seq, output_format='count', sequence_context=0):
+    #this function is for a single sequence - same name used to be for one that searched a list of genes 
+    # now called exact_promoter_scan_genelist
+    # 
+    # scans a sequence (biopython object) for a motif in both forward and backward directions 
+    # If output format is 'count', then just lists the number of hits. 
+    # If output format is 'full', gives the location, direction (relative to the gene), and
+    # sequence context (number of bases on either side of the hit)output_format
+    
+
+    L_motif = len(motif)
+
+    #fwd search
+    prom_seq_fwd = str(prom_seq)
+    L_prom = len(prom_seq_fwd)
+    motif_sites_fwd = [m.start() for m in re.finditer(motif, prom_seq_fwd)]
+    #to find overlapping motifs
+    #[m.start() fr m in re.finditer('(?=' + motif + ')', prom_seq_rev)]
+
+    #reverse search
+    #rev search
+    prom_seq_rev = str(prom_seq.reverse_complement())
+    #location is in reference to the fwd seq
+    motif_sites_rev = [len(prom_seq_rev) - m.start() - L_motif for m in re.finditer(motif, prom_seq_rev)]
+
+    if output_format == 'count':  
+        n_motifs_gene = len(motif_sites_fwd) + len(motif_sites_rev)
+        output = n_motifs_gene
+    elif output_format == 'full': 
+        loc_hitseq_gene = []
+        for motif_site in motif_sites_fwd: 
+            loc = L_prom-1-motif_site
+            hitseq = prom_seq_fwd[motif_site-sequence_context:motif_site+L_motif+sequence_context]  
+            hitdir = 'fwd'
+            loc_hitseq_gene.append((loc,hitdir,hitseq))
+        for motif_site in motif_sites_rev: 
+            loc = L_prom - motif_site+L_motif
+            hitseq = prom_seq_rev[(L_prom-motif_site-L_motif-sequence_context):(L_prom-motif_site+sequence_context)]
+            hitdir = 'rev'
+            loc_hitseq_gene.append((loc,hitdir,hitseq))
+
+        if len(loc_hitseq_gene)==0: 
+            output = None
+        else:
+            output = loc_hitseq_gene
+    else: 
+        print("choose output_format: 'count' or 'full' ")
+        
+    return output
+
+
+
 def threshold_sign(x, high_threshold, low_threshold): 
     if x > high_threshold:
         x_sign = 1
@@ -1368,9 +1421,10 @@ def threshold_group_SC_series(A,B, high_threshold, low_threshold ):
 
     return group
 
-def threshold_group_KL(a,high_threshold, low_threshold):
+def threshold_group(a,high_threshold, low_threshold):
+    #change to this more general name from threshold_group_KL
     #input: a, b, high_threshold, low_threshold
-    #output: group - either {'up_up', 'up_flat','up_down','flat_flat', 'down_flat','down_down'}
+    #output: group - either up, flat, or down
 
     a_sign = threshold_sign(a, high_threshold, low_threshold)
 
@@ -1385,11 +1439,11 @@ def threshold_group_KL(a,high_threshold, low_threshold):
 
     return group
 
-def threshold_group_KL_series(A, high_threshold, low_threshold ):
+def threshold_group_series(A, high_threshold, low_threshold ):
     
     group = []
     for ind,item in A.iteritems():
-        group.append(threshold_group_KL(item,high_threshold, low_threshold))
+        group.append(threshold_group(item,high_threshold, low_threshold))
 
     group = pd.Series(group, index = A.index)
 
@@ -1782,3 +1836,25 @@ def consistant_joint_topologies(ortholog_dataset, paralog_labels, resolution):
                     #print("{} and {} have similar joint topologies: {} and {} respectively".format(row['SC_common_name_low'],row['SC_common_name_high'],joint_topology['low'],joint_topology['high']))
 
     return(ind_list)
+
+def get_other_paralogs_from_dataframe(genes, dataframe): 
+    #using an input list of genes that have paralogs, and a dataframe that contains its paralogs, outputs a dataframe that
+    #has just the other paralogs that are not listed. 
+    #the genes must be listed as the SC_common_name, and the dataframe must have sc_genename and kl_genename fields. 
+    N_genes_in = len(genes)
+    dataframe_genes = dataframe[dataframe['SC_common_name'].isin(genes)]
+    sc_genenames = dataframe_genes['sc_genename']
+    kl_genenames = dataframe_genes['kl_genename']
+    dataframe_all = dataframe[dataframe['kl_genename'].isin(kl_genenames)]
+    sc_genenames_all = dataframe_all['sc_genename']
+    sc_genenames_paralogs = list(set(sc_genenames_all)-set(sc_genenames))
+    N_genes_out = len(sc_genenames_paralogs)
+    if N_genes_in != N_genes_out: 
+        print("number of genes in not equal to number of genes out - maybe one of the input genes doesn't have a paralog, or it is not contained in the dataframe") 
+    dataframe_paralogs = dataframe_all[dataframe_all['sc_genename'].isin(sc_genenames_paralogs)]
+    
+    return(dataframe_paralogs)
+    
+    
+    return 
+

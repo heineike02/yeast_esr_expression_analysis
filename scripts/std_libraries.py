@@ -47,6 +47,7 @@ import matplotlib.pyplot as plt
 from collections import Counter
 # import scipy.stats as stats
 # from itertools import chain
+#from itertools import product
 #this only works if you are online
 online_input = input("are you online? Yes/No")
 if online_input == "Yes": 
