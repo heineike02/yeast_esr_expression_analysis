@@ -849,23 +849,39 @@ def build_motif_dict(fname = data_processing_dir + os.path.normpath('motifs/JASP
                     motif_dict[line.split()[1]]=line.split()[2]
     return motif_dict
 
-def read_ame_output(fname, motif_dict):
+def read_ame_output(fname):
     #reads in ame program output file from meme suits
-    #assumes first 13 lines are not data
-    motif_name_list = []
-    pval_list = []
+    #an older version of Meme didn't list the name of the motif, so needed a motif_dict, but not necessary anymore. 
+    #assumes first 12 lines are not data
+    motif_id = []
+    motif_name = []
+    motif_consensus = []
+    pval = []
+    pval_corr = []
     with open(fname,'r') as f: 
-        for jj in range(1,13):
-            f.next()
+        for jj in range(1,6):
+            next(f)
+        #extract the name of the motif file from the command
+        command = next(f)
+        motif_file = command.split()[-1].split('/')[-1]
+        for jj in range(7,13):
+            next(f)
         for line in f:
-            #Add motif name
-            motif_id = line.split()[5]
-            motif_name_list.append(motif_dict[motif_id])
-            #Add two tailed corrected p-value to list (why two tailed? what is U-value? What is corrected p-Value?)
-            pval_list.append(line.split()[-1][0:-1])
-    
-    
-    ame_dict = {"motif_name": motif_name_list, "pval":pval_list}
+            if motif_file == 'JASPAR2018_CORE_fungi_redundant.meme':
+                motif_id.append(line.split()[5])
+                motif_name.append(line.split()[6])
+                motif_consensus.append(line.split()[7].strip('()'))
+            else: 
+                motif_id.append(line.split()[5])
+                motif_name.append(line.split()[5])
+                motif_consensus.append(line.split()[6].strip('()'))
+            #Add right-tailed p-value to list
+            pval.append(float(line.split()[-9]))
+            #Add right-tailed corrected p-value to list
+            pval_corr.append(float(line.split()[-2]))
+
+
+    ame_dict = {"motif_id": motif_id, "motif_name": motif_name, "motif_consensus": motif_consensus, "pval":pval, "pval_corr": pval_corr}
     ame_data = pd.DataFrame.from_dict(ame_dict)
     
     return ame_data
@@ -873,12 +889,18 @@ def read_ame_output(fname, motif_dict):
 def run_ame_analysis(spec, target_gene_list, control_gene_list,target_fname_prefix, control_fname_prefix, motif, 
                      promoter_dir = {'KL': data_processing_dir+'/kl_promoters/' , 'SC': data_processing_dir + '/sc_promoters/'},
                      promoter_fname = {'KL': 'kl_promoters.pkl', 'SC': 'sc_promoters.pkl'},
-                     ame_scoring = 'totalhits',
-                     ame_method = 'fisher',
+                     ame_scoring = 'avg',
+                     ame_method = 'ranksum',
                      ame_pvalue_threshold = '0.05' ):
     #runs ame program from meme software for given target gene lit, control gene list and set of motifs. 
     #extract promoters
-    promoters = pd.read_pickle(promoter_dir[spec] + promoter_fname[spec]) 
+    #spec: Species - either 'KL' or 'SC'
+    #target gene list 
+    #
+    #ame_scoring.  Chose 'avg' as default - the average odds score for the sequence.  Since all the sequences are the same length, this seems like a good choice.  'total_hits' is also an option if you believe the number of hits is important, 
+    #ame_method.  chose 'ranksum' as default - this is the default for the website.  'fisher' is also used, but this requires setting a threshold (default on the website is 1) for the score of each hit to be called a true positive.  
+    
+    promoters = pd.read_pickle(os.path.normpath(promoter_dir[spec] + promoter_fname[spec])) 
     target_promoters = promoters.loc[target_gene_list,]
     control_promoters = promoters.loc[control_gene_list,]  #for control using just promoters which have orthologs - but should I use all promoters? 
 
@@ -902,10 +924,10 @@ def run_ame_analysis(spec, target_gene_list, control_gene_list,target_fname_pref
     #Use subprocess to run meme commands: 
 
     #ame --verbose 1 --oc . --control all_kl_promoters.fasta --bgformat 1 --scoring avg --method ranksum --pvalue-report-threshold 0.05 mito_promoters_kl.fasta db/JASPAR/JASPAR_CORE_2016_fungi.meme
-    motif_db = promoter_dir[spec]+ motif['fname']
-    target_sequences = promoter_dir[spec] + 'promoter_sets/' + fname_prefixes['target'] + '_promoters.fasta'
-    control_sequences = promoter_dir[spec] + 'promoter_sets/' + fname_prefixes['control'] + '_promoters.fasta'
-    output_dir = promoter_dir[spec] + 'ame_output'
+    motif_db = os.path.normpath(data_processing_dir + '/motifs/'+ motif['fname'])
+    target_sequences = os.path.normpath(promoter_dir[spec] + 'promoter_sets/' + fname_prefixes['target'] + '_promoters.fasta')
+    control_sequences = os.path.normpath(promoter_dir[spec] + 'promoter_sets/' + fname_prefixes['control'] + '_promoters.fasta')
+    output_dir = os.path.normpath(promoter_dir[spec] + 'ame_output')
     file_prefix = target_fname_prefix + '_vs_' + control_fname_prefix + '_motif_' + motif['name'] + '_pVal_' + ame_pvalue_threshold
 
 
@@ -943,6 +965,29 @@ def run_ame_analysis(spec, target_gene_list, control_gene_list,target_fname_pref
 #                   "--pvalue-report-threshold", ame_pvalue_threshold, 
 #                   target_sequences,
 #                   motif_db]
+
+def merge_overlap_column(series_a, series_b):
+    #for two string columns in an outer merge that should have identical entries except where 
+    #there are np.nan values, outputs a list that has just one value and replaces np.nan with 
+    #value that is present in either series a or series b. 
+    #set consensus of x equal to None when not present instead of np.nan
+
+    series_a = series_a.where(series_a.notnull(), other=None)
+    series_b = series_b.where(series_b.notnull(), other=None)
+
+    out_list = []
+    for a,b in zip(series_a,series_b):
+        if a==b: #np.isnan(b):
+            out = a
+        elif a:
+            out = a
+        elif b: 
+            out = b
+        else: 
+            print("a doesn't match b a: " + a + " b: " + b)
+        out_list.append(out)
+
+    return out_list
     
 def make_foldchange_subsets(kl_sc_PKA_data, pthreshold_KL, pthreshold_SC): 
     ##would be nice to have option to make thresholds on either padj or log2FoldChange
