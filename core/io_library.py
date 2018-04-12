@@ -15,6 +15,7 @@ from Bio.Alphabet import generic_dna
 from ete3 import Tree
 import requests
 from lxml import etree    #parses xml output
+from itertools import product
 
 #Indicate operating environment and import core modules
 location_input = input("what computer are you on? a = Bens, b = gpucluster, c = other   ")
@@ -571,6 +572,69 @@ def load_solis_NMPP1_data(column_to_use):
     
     return solis_PKA_data_summary   
 
+def parse_data_series_matrix_kemmeren(desired_conditions, series_fname, microarray_family_fname): 
+    #Extracts data as a pandas dataframefor desired conditions from a series matrix file similar to the kemmeren gene deletion dataset
+    #
+    #Desired condition is a dictionary in which: 
+    #   the key is the name you want to have for your columns (need not match file)
+    #   the value is the array designator (should match file)
+    #
+    # series data is the series_matrix.txt file from NCBI for the data series. 
+    #
+    #microarray_family name is the name of the file with the table of microarray ids. 
+    #
+
+    microarray_lookup = get_microarray_lookup(microarray_family_fname)
+    ids = set(microarray_lookup.keys())
+
+    with open(series_fname) as f:
+        #Find line that starts table listing gene names and index numbers
+        for line in f: 
+            if line.split('\t')[0] == '!series_matrix_table_begin\n':
+                break
+
+        exp_line = next(f)
+        exp_list = [item.strip('"') for item in exp_line.split()]
+
+        #extract data for only the listed conditions
+        array_inds = {condition: exp_list.index(array) for condition,array in desired_conditions.items()}
+
+        id_list = []
+        orf_list = []
+        exp_value_list = []
+
+        for line in f:
+            linesp = line.split('\t') 
+            if linesp[0] == '!series_matrix_table_end\n':
+                break       
+
+            spot_id = int(linesp[0])
+            if spot_id in ids:
+                id_list.append(spot_id)
+                orf = microarray_lookup[spot_id]
+                orf_list.append(orf)
+                exp_values = [float(linesp[array_ind]) for array_ind in array_inds.values()]
+                exp_value_list.append(exp_values)
+
+    #Make dataframe with orf values as index. 
+    data = pd.DataFrame(exp_value_list, index = id_list, columns = array_inds.keys())
+
+    data['sc_genename']=orf_list
+    #take mean of columns with duplicated values. 
+    grouped = data.groupby('sc_genename')
+    data_mean = grouped.mean()
+
+    return data_mean
+
+def get_microarray_lookup(fname,nrows_skip=17):
+    #given the filename of a full micrarray table from geo, make a lookup table for the genes using the
+    # SYSTEMATIC_NAME column
+    microarray_info = pd.read_table(fname, skiprows=nrows_skip)
+    #only keeps rows for 'gene' reporter group (throws out controls) 
+    microarray_info = microarray_info[microarray_info['REPORTER_GROUP']=='gene']
+    microarray_lookup = dict(zip(microarray_info['ID'], microarray_info['SYSTEMATIC_NAME']))
+    
+    return microarray_lookup
 
 def write_YGOB_orth_lookup_table(species1, species2, base_dir, all_ortholog_file):
     #for each position in species 1
@@ -1903,3 +1967,24 @@ def get_other_paralogs_from_dataframe(genes, dataframe):
     
     return 
 
+def get_gis1_rph1_sets(act_threshold, inh_threshold, kl_sc_PKA_data_subset, condition = 'log'): 
+    #Use cutoff to assign activated, inhibited, and repressed for gis1, rph1 and gis1rph1 for each condition in the westholm dataset
+    #input is
+    #   threshold levels 
+    #   kl_sc_PKA_data_subset - must have the columns for the data: ['log_g-wt','log_r-wt', 'log_gr-wt']
+    # condition can be 'log', 'PDS' or '3d' for 3days stationary phase
+    
+    rg_columns = [condition + '_g-wt',condition + '_r-wt', condition + '_gr-wt']
+    for column in rg_columns: 
+        kl_sc_PKA_data_subset[column+'_label'] = threshold_group_series(kl_sc_PKA_data_subset[column], act_threshold, inh_threshold )
+
+    strains = ['g','r','gr']
+    gr_sets = {}
+    exp_profiles = tuple(product(['up','flat','down'],['up','flat','down'],['up','flat','down']))
+    for g_label, r_label, gr_label in exp_profiles:
+        gr_sets['g-'+g_label + '_r-'+r_label + '_gr-'+gr_label] = list(kl_sc_PKA_data_subset[(kl_sc_PKA_data_subset[condition + '_g-wt_label']==g_label) &
+                                                                      (kl_sc_PKA_data_subset[condition + '_r-wt_label']==r_label) &
+                                                                      (kl_sc_PKA_data_subset[condition + '_gr-wt_label']==gr_label)]['sc_genename'])
+
+
+    return kl_sc_PKA_data_subset, gr_sets

@@ -27,6 +27,7 @@ data_processing_dir = base_dir + os.sep + os.path.normpath("expression_data") + 
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+#import matplotlib.colormap as cm
 #from matplotlib_venn import venn2
 #import seaborn as sns; sns.set(style="ticks", color_codes=True)
 #from sklearn import linear_model
