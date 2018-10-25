@@ -1,0 +1,194 @@
+---
+title: "20171215 DESeq routines for solis msn24 delete data"
+output: html_notebook
+---
+```{r}
+## Installs DESeq2
+## try http:// if https:// URLs are not supported
+# source("https://bioconductor.org/biocLite.R")
+# biocLite("DESeq2")
+```
+```{r}
+library(DESeq2)
+library(ggplot2)
+library(reshape2)
+library(lattice)
+library(dplyr)
+
+base_dir = "C:\\Users\\heine\\github\\expression_broad_data\\expression_data\\SCer_NMPP1_RNA_Seq\\"
+```
+
+```{r}
+#Load raw count data for solis experiment
+
+#countDataList = list(KL = NULL,SC  = NULL)
+#metaDataList = list(KL = NULL,SC  = NULL)
+
+#for (exp_species in c("KL","SC")){
+#  print(paste("species is ", exp_species))
+cts <- paste(base_dir,"solis_2016_counts_msn24.csv",sep = "")
+countData = read.csv(cts, row.names = 1, header = TRUE)
+#selecting out a subset: 
+countData = countData[,colnames(countData)[1:9]]
+countData
+#load
+meta <- paste(base_dir,"solis_2016_counts_msn24_metadata_deseq.csv",sep = "")
+metaData = read.csv(meta, row.names = 1)
+print(metaData)
+```
+
+```{r}
+#Make deseq comparison with interaction term for AS and msn24del strains in +/- NMPP1 conditions
+
+results_alpha = 10e-100
+#default is actually 0.1 - why do I have it set so low?  Does it make a difference? 
+
+sampleIds = metaData %>% tibble::rownames_to_column('sample_id') %>% 
+            filter(strain %in% c('AS','msn24del') & HS == 'no') %>% pull(sample_id)
+    
+print(sampleIds)
+    
+countData_plusminus <- countData[,sampleIds]
+metaData_plusminus <- metaData[sampleIds, c("strain", "NMPP1") ,drop = FALSE]
+
+#here is the main difference - the design is ~strain + NMPP1 + strain:NMPP1
+dds_plusminus = DESeqDataSetFromMatrix(countData = countData_plusminus, colData = metaData_plusminus, design = ~strain + NMPP1 + strain:NMPP1)
+dds_plusminus_out = DESeq(dds_plusminus)
+resultsNames(dds_plusminus_out)
+plotDispEsts(dds_plusminus_out)
+
+#remove zero rows which all have no count
+paste(nrow(dds_plusminus_out[ rowSums(counts(dds_all)) <= 1, ]), "items removed from count data because there were no counts")
+dds_plusminus_filtered = dds_plusminus_out[ rowSums(counts(dds_all)) > 1, ]
+
+rld <- rlog(dds_plusminus_filtered, blind = FALSE)  #, fitType = 'local')
+rlog_plusminus_filtered <- assay(rld)
+
+write.csv(as.data.frame(rlog_plusminus_filtered), file=paste(base_dir,"solis_2016_msn24_rlog.csv",sep = ""))
+  
+  
+#save the strain/drug interaction term LFC
+res_name = 'strainmsn24del.NMPP1yes'
+fname_suffix = 'msn24del_nmpp1_interaction'
+res = results(dds_plusminus_filtered, name=res_name, alpha = results_alpha)
+print(res)
+plotMA(res)
+#Sort results and write as a .csv file
+resOrdered <- res[order(res$padj),]
+write.csv(as.data.frame(resOrdered), 
+file=paste(base_dir,"solis_2016_",fname_suffix,"_deseq2.csv",sep = ""))
+
+
+
+```
+
+```{r}
+#Make deseq comparison between AS+ and AS- for both WT and MSN24
+
+results_alpha = 10e-100
+#default is actually 0.1 - why do I have it set so low?  Does it make a difference? 
+
+sampleIds = metaData %>% tibble::rownames_to_column('sample_id') %>% 
+            filter(strain %in% c('AS','msn24del') & HS == 'no') %>% pull(sample_id)
+    
+print(sampleIds)
+    
+countData_plusminus <- countData[,sampleIds]
+metaData_plusminus <- metaData[sampleIds, c("strain", "NMPP1") ,drop = FALSE]
+
+#here is the main difference - the design is just strain + strain:NMPP1
+dds_plusminus = DESeqDataSetFromMatrix(countData = countData_plusminus, colData = metaData_plusminus, design = ~strain + strain:NMPP1)
+dds_plusminus_out = DESeq(dds_plusminus)
+resultsNames(dds_plusminus_out)
+plotDispEsts(dds_plusminus_out)
+
+#remove zero rows which all have no count
+paste(nrow(dds_plusminus_out[ rowSums(counts(dds_all)) <= 1, ]), "items removed from count data because there were no counts")
+dds_plusminus_filtered = dds_plusminus_out[ rowSums(counts(dds_all)) > 1, ]
+
+res_names = c('strainAS.NMPP1yes','strainmsn24del.NMPP1yes')
+fname_suffixes = c('AS_nmpp1','msn24del_nmpp1')
+for (ind in c(1:2)){
+  res = results(dds_plusminus_filtered, name=res_names[ind], alpha = results_alpha)
+  print(res)
+  plotMA(res)
+  #Sort results and write as a .csv file
+  resOrdered <- res[order(res$padj),]
+  write.csv(as.data.frame(resOrdered), 
+  file=paste(base_dir,"solis_2016_",fname_suffixes[ind],"_deseq2.csv",sep = ""))
+
+}
+
+
+```
+
+
+
+```{r}
+#Make comparison between AS+ and AS- for just MSN24
+
+results_alpha = 10e-100
+#default is actually 0.1 - why do I have it set so low?  Does it make a difference? 
+
+sampleIds = metaData %>% tibble::rownames_to_column('sample_id') %>% 
+            filter(strain %in% c('msn24del') & HS == 'no') %>% pull(sample_id)
+    
+print(sampleIds)
+    
+countData_plusminus <- countData[,sampleIds]
+metaData_plusminus <- metaData[sampleIds, c("NMPP1") ,drop = FALSE]
+
+dds_plusminus = DESeqDataSetFromMatrix(countData = countData_plusminus, colData = metaData_plusminus, design = ~NMPP1)
+#dds_plusminus$condition <- factor(dds_plusminus$condition, levels = c("noNMPP1", "yesNMPP1"))
+dds_plusminus_out = DESeq(dds_plusminus)
+plotDispEsts(dds_plusminus_out)
+  
+#should I be removing genes with no counts?
+
+res = results(dds_plusminus_out, alpha = results_alpha)
+print(res)
+plotMA(res)
+#plotMA(res, main = paste(exp_species,current_media,"t40 AS- VS AS+"), ylim = c(-6,6))
+#Sort results and write as a .csv file
+resOrdered <- res[order(res$padj),]
+write.csv(as.data.frame(resOrdered), 
+  file=paste(base_dir,"solis_2016_msn24del_nmpp1_deseq2_onlystraindata.csv",sep = ""))
+
+resultsNames(dds_plusminus_out)
+```
+
+
+
+```{r}
+# Make rlog data for all samples
+
+#Turns all kl imported data into a DESeqDataSet
+#Not sure if this design is correct because there will be strain:NMPP1, strain:HS, NMPP1:HS, and strain:NMPP1:HS interactions. 
+dds_all = DESeqDataSetFromMatrix(countData = countData, colData = metaData, design = ~strain+NMPP1+HS)
+
+print(dds_all)
+#If there are any rows with zero or one count, this command removes them, (in this dataset there are not)
+paste(nrow(dds_all[ rowSums(counts(dds_all)) <= 1, ]), "items removed from count data because there were no counts")
+dds_all_filtered = dds_all[ rowSums(counts(dds_all)) > 1, ]
+
+  
+#Finds rlog values and prints to file
+#uses all default options except blind = FALSE instead of true 
+#Note from documentation:  
+#If many of genes have large differences in counts due to the experimental design,it is important to set blind=FALSE for downstream analysis.
+
+rld_all <- rlog(dds_all_filtered, blind = FALSE)  #, fitType = 'local')
+rlog_all <- assay(rld_all)
+#head(rlog_all)
+#plot(rlog_all[,"7050"],rlog_all[,"7002"])
+
+write.csv(as.data.frame(rlog_all), file=paste(base_dir,"solis_2016_msn24_rlog_all.csv",sep = ""))
+  
+  
+
+
+
+
+```
+
+

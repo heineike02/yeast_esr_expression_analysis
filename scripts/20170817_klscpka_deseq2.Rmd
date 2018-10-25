@@ -1,0 +1,416 @@
+---
+title: "20170819 DESeq reoutines"
+output: html_notebook
+---
+```{r}
+## Installs DESeq2
+## try http:// if https:// URLs are not supported
+# source("https://bioconductor.org/biocLite.R")
+# biocLite("DESeq2")
+```
+```{r}
+library(DESeq2)
+library(ggplot2)
+library(reshape2)
+library(lattice)
+library(dplyr)
+
+base_dir = "C:\\Users\\heine\\github\\expression_broad_data\\expression_data\\20170817_klscpka\\"
+```
+
+```{r}
+#Load raw count data for each species from experiment.
+
+countDataList = list(KL = NULL,SC  = NULL)
+metaDataList = list(KL = NULL,SC  = NULL)
+
+for (exp_species in c("KL","SC")){
+  print(paste("species is ", exp_species))
+  cts <- paste(base_dir,"20170817_klscpka_counts_",exp_species,".txt",sep = "")
+  countData = read.table(cts, row.names = 1, header = TRUE, sep = "\t")
+  #selecting out a subset: 
+  # countData = countData[,c("7001","7002")]
+   
+  #this metadata file comes from a python routine. 
+  meta <- paste(base_dir,"20170817_klscpka_metadata_deseq_",exp_species,".csv",sep = "")
+  metaData = read.csv(meta, row.names = 1)
+  colnames(countData) = row.names(metaData)
+  countDataList[[exp_species]]=countData
+  metaDataList[[exp_species]]=metaData
+  print(metaData)
+  print(countData)
+}
+
+
+```
+
+```{r}
+# Make rlog data for all samples
+
+for (exp_species in c("KL","SC")){
+  print(paste("species is ", exp_species))
+  countData = countDataList[[exp_species]]
+  metaData = metaDataList[[exp_species]]
+  print(metaData)
+  print(countData)
+  
+  #Turns all kl imported data into a DESeqDataSet
+  dds_all = DESeqDataSetFromMatrix(countData = countData, colData = metaData, design = ~strain+NMPP1+media+time)
+  print(dds_all)
+  #If there are any rows with zero or one count, this command removes them, (in this dataset there are not)
+  paste(nrow(dds_all[ rowSums(counts(dds_all)) <= 1, ]), "items removed from Kl count data because there were no counts")
+  dds_all_filtered = dds_all[ rowSums(counts(dds_all)) > 1, ]
+
+    
+  #Finds rlog values and prints to file
+  #uses all default options except blind = FALSE instead of true 
+  #Note from documentation:  
+  #If many of genes have large differences in counts due to the experimental design,it is important to set blind=FALSE for downstream analysis.
+  
+  rld_all <- rlog(dds_all_filtered, blind = FALSE)  #, fitType = 'local')
+  rlog_all <- assay(rld_all)
+  #head(rlog_all)
+  #plot(rlog_all[,"7050"],rlog_all[,"7002"])
+  
+  write.csv(as.data.frame(rlog_all), file=paste(base_dir,"20170817_klscpka_rlog_",exp_species,".csv",sep = ""))
+  
+  
+}
+
+
+
+```
+
+
+```{r}
+#Make t=40 AS - v.s. AS + comparisons for both SDC and YPD. 
+
+#samples_SDC_t40 <- list(KL = c("7001","7002","7005","7006","7039","7040"),SC  = c("7009","7010","7019","7020","7041","7042"))
+#samples_YPD_t40 <- list(KL = c("7025","7026","7033","7034"),SC  = c("7027","7028","7035","7036","7047","7048"))
+
+#7051 is a replicate of 7001.  
+#Remove 7051 from the metadata to avoid providing too much weight on that sample. 
+metaDataList$KL = metaDataList$KL[!rownames(metaDataList$KL) %in% c("7051"), ]
+
+results_alpha = 10e-100
+#default is actually 0.1 - why do I have it set so low?  Does it make a difference? 
+
+for (exp_species in c("KL","SC")){
+  print(paste("species is ", exp_species))
+  countData = countDataList[[exp_species]]
+  metaData = metaDataList[[exp_species]]
+  
+  for (current_media in c("SDC","YPD")){
+    print(current_media)
+    sampleIds = metaData %>% tibble::rownames_to_column('sample_id') %>% 
+                filter(strain == 'AS' & media == current_media & time == 't40') %>% pull(sample_id)
+    
+    print(sampleIds)
+    
+    countData_plusminus <- countData[,sampleIds]
+    metaData_plusminus <- metaData[sampleIds, "NMPP1" ,drop = FALSE]
+    
+    dds_plusminus = DESeqDataSetFromMatrix(countData = countData_plusminus, colData = metaData_plusminus, design = ~NMPP1)
+    #dds_plusminus$condition <- factor(dds_plusminus$condition, levels = c("noNMPP1", "yesNMPP1"))
+    dds_plusminus_out = DESeq(dds_plusminus)
+    plotDispEsts(dds_plusminus_out)
+  
+    #should I be removing genes with no counts?
+  
+    res = results(dds_plusminus_out,  alpha = results_alpha)
+    print(res)
+    plotMA(res, main = paste(exp_species,current_media,"t40 AS- VS AS+"), ylim = c(-6,6))
+    #Sort results and write as a .csv file
+    resOrdered <- res[order(res$padj),]
+    write.csv(as.data.frame(resOrdered), 
+              file=paste(base_dir,"20170817_klscpka_DESEQ_",current_media,"_t40_AsMinvAsPlus_",exp_species,".csv",sep = ""))
+  }
+}
+
+```
+
+
+
+```{r}
+#Break down into four AS/WT -/+ groups and then look at AS+ to WT+
+#next look at WT+ to WT-
+#next look at AS- to AS-
+
+#7051 is a replicate of 7001.  
+#Remove 7051 from the metadata to avoid providing too much weight on that sample. 
+#metaDataList$KL = metaDataList$KL[!rownames(metaDataList$KL) %in% c("7051"), ]
+
+results_alpha = 10e-100
+#default is actually 0.1 - why do I have it set so low?  Does it make a difference? 
+
+contrast_conditions = list(ASplus_vs_WTplus = c("ASyesNMPP1","WTyesNMPP1"),
+                           WTplus_vs_WTminus = c("WTyesNMPP1","WTnoNMPP1"),
+                           ASminus_vs_WTminus = c("ASnoNMPP1","WTnoNMPP1"))
+
+for (exp_species in c("KL","SC")){
+  print(paste("species is", exp_species))
+  countData = countDataList[[exp_species]]    #double bracket means it returns a dataframe not a list
+  metaData = metaDataList[[exp_species]]
+
+  sampleIds = metaData %>% tibble::rownames_to_column('sample_id') %>%
+              filter(strain %in% c('AS','WT') & media == 'SDC' & time == 't40') %>% pull(sample_id)
+
+print(sampleIds)
+
+  countData_plusminus <- countData[,sampleIds]
+  #Add an interaction column named groups to the metadata file
+  metaData_plusminus <- metaData[sampleIds, c("strain","NMPP1") ,drop = FALSE]
+  metaData_plusminus$groups = paste0(metaData_plusminus$strain,metaData_plusminus$NMPP1)
+  metaData_plusminus = metaData_plusminus[,"groups",drop = FALSE]
+
+  dds_plusminus = DESeqDataSetFromMatrix(countData = countData_plusminus, colData = metaData_plusminus,                                          design = ~groups)
+  #dds_plusminus$condition <- factor(dds_plusminus$condition, levels = c("noNMPP1", "yesNMPP1"))
+  dds_plusminus_out = DESeq(dds_plusminus)
+  plotDispEsts(dds_plusminus_out)
+
+  #should I be removing genes with no counts?
+
+  for (name in names(contrast_conditions)) {
+    res = results(dds_plusminus_out,  alpha = results_alpha,
+                  contrast=c("groups", contrast_conditions[[name]][1], contrast_conditions[[name]][2]))
+    print(res)
+    plotMA(res, main = paste(exp_species,"SDC t40 ",name), ylim = c(-6,6))
+    #Sort results and write as a .csv file
+    resOrdered <- res[order(res$padj),]
+    write.csv(as.data.frame(resOrdered),
+               file=paste(base_dir,"20170817_klscpka_DESEQ_SDC_t40_",name, "_", exp_species,".csv",sep = ""))
+  }
+
+}
+
+
+```
+
+
+
+
+```{r}
+
+#Analysis of drug:strain interactions
+
+#7051 is a replicate of 7001.  
+#Remove 7051 from the metadata to avoid providing too much weight on that sample. 
+#metaDataList$KL = metaDataList$KL[!rownames(metaDataList$KL) %in% c("7051"), ]
+
+results_alpha = 10e-100
+#default is actually 0.1 - why do I have it set so low?  Does it make a difference? 
+
+for (exp_species in c("KL","SC")){
+  print(paste("species is ", exp_species))
+  countData = countDataList[[exp_species]]
+  metaData = metaDataList[[exp_species]]
+  
+  sampleIds = metaData %>% tibble::rownames_to_column('sample_id') %>% 
+              filter(strain %in% c('AS','WT') & media == 'SDC' & time == 't40') %>% pull(sample_id)
+  
+  print(sampleIds)
+  
+  countData_plusminus <- countData[,sampleIds]
+  metaData_plusminus <- metaData[sampleIds, c("strain","NMPP1") ,drop = FALSE]
+
+  dds_plusminus = DESeqDataSetFromMatrix(countData = countData_plusminus, colData = metaData_plusminus, design = ~strain + NMPP1 + strain:NMPP1)
+  #dds_plusminus$condition <- factor(dds_plusminus$condition, levels = c("noNMPP1", "yesNMPP1"))
+  dds_plusminus_out = DESeq(dds_plusminus)
+  plotDispEsts(dds_plusminus_out)
+
+  #should I be removing genes with no counts?
+
+  res = results(dds_plusminus_out,  alpha = results_alpha)
+  # print(res)
+  # plotMA(res, main = paste(exp_species,current_media,"t40 AS- VS AS+"), ylim = c(-6,6))
+  # #Sort results and write as a .csv file
+  # resOrdered <- res[order(res$padj),]
+  # write.csv(as.data.frame(resOrdered),
+  #           file=paste(base_dir,"20170817_klscpka_DESEQ_",current_media,"_t40_AsMinvAsPlus_",exp_species,".csv",sep = ""))
+
+}
+
+
+```
+
+
+
+metaData_plusminus$strain
+metaData_plusminus$strain = relevel(metaData_plusminus$strain, ref = 'WT')
+metaData_plusminus$NMPP1 = relevel(metaData_plusminus$NMPP1, ref = 'noNMPP1')
+dds_plusminus = DESeqDataSetFromMatrix(countData = countData_plusminus, colData = metaData_plusminus, design = ~strain + NMPP1 + strain:NMPP1)
+dds = dds_plusminus
+dds
+DESeq2::design(dds)
+res = results(dds)
+dds = DESeq(dds)
+res = results(dds)
+res
+library(dplyr)
+res %>% arrange(pvalue)
+res %>% as.data.frame() %>% arrange(pvalue)
+res %>% as.data.frame() %>% arrange(pvalue) %>% head()
+res %>% as.data.frame() %>% tibble::rownames_to_column() %>% arrange(pvalue) %>% head()
+t2g <- biomaRt::getBM(attributes = c("ensembl_transcript_id", "ensembl_gene_id",
+"external_gene_name"), mart = mart)
+source("https://bioconductor.org/biocLite.R")
+biocLite("biomaRt")
+res %>% as.data.frame() %>% tibble::rownames_to_column() %>% arrange(pvalue) %>% head()
+
+
+```{r}
+#Remove strain with reporters from analysis (7050)
+countData_norep = countData[ , -which(names(countData) %in% c("7050"))]
+metaData_norep = metaData[-which(rownames(metaData) %in% c("7050")), ] 
+
+dds_all = DESeqDataSetFromMatrix(countData = countData_norep, colData = metaData_norep, design = ~strain+NMPP1+media+time)
+#If there are any rows with zero or one count, this command removes them, (in this dataset there are not)
+dds_all
+paste(nrow(dds_all[ rowSums(counts(dds_all)) <= 1, ]), "items removed from Kl count data because there were no counts")
+dds_all_filtered = dds_all[ rowSums(counts(dds_all)) > 1, ]
+
+
+dds_postdeseq = DESeq(dds_all_filtered)
+res = results(dds_postdeseq)
+```
+
+
+```{r}
+#Reduce experiment to just the two AS_minus and AS_plus experiments and get DESEQ fold changes
+
+klCountData_plusminus <- klCountData[,c("AS1_minus","AS2_minus", "AS1_plus","AS2_plus")]
+klMetaData_plusminus <- klMetaData[c("AS1_minus","AS2_minus","AS1_plus","AS2_plus"), ,drop = FALSE]
+
+dds_plusminus = DESeqDataSetFromMatrix(countData = klCountData_plusminus, colData = klMetaData_plusminus, design = ~condition)
+dds_plusminus$condition <- factor(dds_plusminus$condition, levels = c("AS_minus", "AS_plus"))
+dds_plusminus_out = DESeq(dds_plusminus)
+plotDispEsts(dds_plusminus_out)
+res = results(dds_plusminus_out,  alpha = 10e-100)
+resMLE <- results(dds_plusminus_out, addMLE=TRUE,  alpha = 10e-100)
+plotMA(res, main = "KL AS- VS AS+", ylim = c(-6,6))
+par(mfrow=c(1,2))
+plotMA(res, main = "shrunken LFC", ylim = c(-6,6))
+plotMA(resMLE, MLE=TRUE, main="unshrunken LFC", ylim=c(-6,6))
+#Sort results and write as a .csv file
+resOrdered <- res[order(res$padj),]
+write.csv(as.data.frame(resOrdered), 
+          file="C:/Users/Ben/Documents/GitHub/expression_broad_data/expression_data/kl_PKA_as_20160824/DESEQ_KLac_ASmin_ASplus.csv")
+```
+
+```{r}
+#DESeq LFC data for KLac WT_minus/AS_minus/WT_plus v.s. KLac AS_plus 
+#treating everything except AS_plus as a minus
+
+klCountData_WTvAS <- klCountData[,c("WT_minus","AS1_plus","AS2_plus")]
+klMetaData_WTvAS <- klMetaData[c("WT_minus","AS1_plus","AS2_plus"), , drop = FALSE]
+
+dds_WTvAS = DESeqDataSetFromMatrix(countData = klCountData_WTvAS, colData = klMetaData_WTvAS, design = ~condition)
+dds_WTvAS$condition <- factor(dds_WTvAS$condition, levels = c("WT_minus", "AS_plus"))
+
+paste(nrow(dds_WTvAS[ rowSums(counts(dds_WTvAS)) <= 1, ]), "items removed from Kl count data because there were no counts")
+dds_WTvAS_filtered = dds_WTvAS[ rowSums(counts(dds_WTvAS)) > 1, ]
+
+dds_WTvAS_out = DESeq(dds_WTvAS_filtered)
+plotDispEsts(dds_WTvAS_out)
+res_WTvAS = results(dds_WTvAS_out,  alpha = 10e-8)
+resMLE_WTvAS <- results(dds_WTvAS_out, addMLE=TRUE,  alpha = 10e-8)
+plotMA(res_WTvAS, main = "KL WT- VS AS+", ylim = c(-6,6))
+par(mfrow=c(1,2))
+plotMA(res_WTvAS, main = "shrunken LFC", ylim = c(-6,6))
+plotMA(resMLE_WTvAS, MLE=TRUE, main="unshrunken LFC", ylim=c(-6,6))
+#Sort results and write as a .csv file
+resOrdered_WTvAS <- res_WTvAS[order(res_WTvAS$padj),]
+write.csv(as.data.frame(resOrdered_WTvAS),
+           file="C:/Users/Ben/Documents/GitHub/expression_broad_data/expression_data/kl_PKA_as_20160824/DESEQ_KLac_WTmin_ASplus.csv")
+
+
+```
+
+Strange that the ratio of medians normalized data doesn't really seem to have a normalized sum: 
+> apply(klCountData_psuedo,2,sum)
+AS1_plus AS2_plus WT_minus  WT_plus 
+13836185 15081192 18936631 13403258 
+> apply(klCountData_norm,2,sum)
+AS1_plus AS2_plus WT_minus  WT_plus 
+14825647 14864233 17170150 13906631
+
+Removing NA instead of adding a pseudocount: 
+> apply(klCountData,2,sum)
+AS1_plus AS2_plus WT_minus  WT_plus 
+13833701 15078708 18934147 13400774 
+> apply(klCountData_norm,2,sum)
+AS1_plus AS2_plus WT_minus  WT_plus 
+14820140 14861583 17166059 13902784 
+
+I wonder why they used that? 
+
+```{r}
+source("https://bioconductor.org/biocLite.R")
+biocLite("DESeq2")
+```
+
+
+
+
+
+```{r}
+# #Normalize raw count data using median of ratios method from DESEQ and compare with rlog data
+# 
+# #with a pseudo count 
+# #klCountData_psuedo <- klCountData + 1/2
+# #KiR <- apply(klCountData_psuedo,1,function(x) (prod(x))^(1/ncol(klCountData_psuedo)))
+# #Kij_KiR  <- apply(klCountData_psuedo,2,function(x) x/KiR)
+# 
+# #Without a pseudo count
+# KiR <- apply(klCountData,1,function(x) (prod(x))^(1/ncol(klCountData)))
+# Kij_KiR  <- apply(klCountData,2,function(x) x/KiR)
+# 
+# #Visualizing histogram of each gene's ratio before picking the median. 
+# Kij_KiR_melted <- melt(as.data.frame(Kij_KiR))
+# ggplot(Kij_KiR_melted,aes(x = value)) + 
+#     facet_wrap(~variable) + 
+#     geom_histogram(binwidth = 0.1) +
+#     coord_cartesian(xlim = c(0, 6)) 
+# #WT Plus has a tighter distribution of counts - and that means that the sum which I was normalizing by before doesn't correlate well with the median of ratios. 
+# sj <- apply(Kij_KiR,2, function(x) median(x,na.rm = TRUE))
+# klCountData_norm <- t(apply(klCountData,1, function(x) x/sj))
+# # scatterplot matrix 
+# splom(klCountData_norm, 
+#   	main="KL data",
+#   	pscales = 0)
+# 
+# par(mfrow=c(2,3))
+# xlabels = c("AS1_minus","AS1_minus", "WT_minus")
+# ylabels = c("AS2_minus","AS1_plus", "WT_plus")
+# for (jj in c(1:length(xlabels))){
+#     plot(klCountData_norm[,xlabels[jj]],klCountData_norm[,ylabels[jj]], xlab = "",  ylab = ylabels[jj])
+# }
+# for (jj in c(1:length(xlabels))){
+#     plot(rlog_all[,xlabels[jj]],rlog_all[,ylabels[jj]],xlab = xlabels[jj], ylab = ylabels[jj])
+# }
+# 
+# write.csv(as.data.frame(klCountData_norm), 
+#           file="C:/Users/Ben/Documents/GitHub/expression_broad_data/expression_data/kl_PKA_as_20160824/norm_KLacdata.csv")
+```
+
+
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+
+```{r}
+y = function(x){
+  c = x^2
+  return(c)
+}
+```
+
+
+```{r}
+y(12)
+```
+

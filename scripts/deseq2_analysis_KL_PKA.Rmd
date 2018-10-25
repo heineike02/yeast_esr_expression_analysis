@@ -1,0 +1,175 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(DESeq2)
+library(ggplot2)
+library(reshape2)
+library(lattice)
+#Would be nice to automatically change pasted os separators
+
+#Load KL data from original file that Kieran Sent. 
+klCts <- "C:/Users/Ben/Documents/GitHub/expression_broad_data/expression_data/kl_PKA_as_20160824/20160824_KL_PKA_AS.txt"
+klCountData = read.table(klCts, row.names = 1, header = TRUE, sep = "\t")
+klCountData = klCountData[,c("AS1_minus","AS2_minus", "WT_minus","WT_plus", "AS1_plus","AS2_plus")]
+
+meta <- "C:/Users/Ben/Documents/GitHub/expression_broad_data/expression_data/kl_PKA_as_20160824/kl_NMPP1_metadata.csv"
+metaData = read.csv(meta, row.names = 1)
+klMetaData <- metaData[c("AS1_minus","AS2_minus", "WT_minus","WT_plus", "AS1_plus","AS2_plus"),]
+#Combines final two columns of metadata
+klMetaData$condition = paste(klMetaData$strain,klMetaData$NMPP1,sep="_")
+klMetaData = klMetaData[ , "condition", drop = FALSE]
+klMetaData$condition = as.factor(klMetaData$condition)  #Avoid error message since this starts as a character. 
+```
+
+ 
+```{r}
+
+#Turns all kl imported data into a DESeqDataSet
+dds_all = DESeqDataSetFromMatrix(countData = klCountData, colData = klMetaData, design = ~condition)
+#If there are any rows with zero or one count, this command removes them, (in this dataset there are not)
+paste(nrow(dds_all[ rowSums(counts(dds_all)) <= 1, ]), "items removed from Kl count data because there were no counts")
+dds_all_filtered = dds_all[ rowSums(counts(dds_all)) > 1, ]
+
+```
+
+
+```{r}
+
+#Finds rlog values and prints to file
+rld_all <- rlog(dds_all_filtered, blind = FALSE, fitType = 'local')
+rlog_all <- assay(rld_all)
+head(rlog_all)
+plot(rlog_all[,"WT_minus"],rlog_all[,"WT_plus"])
+
+write.csv(as.data.frame(rlog_all), 
+          file="C:/Users/Ben/Documents/GitHub/expression_broad_data/expression_data/kl_PKA_as_20160824/rlog_KLacdata.csv")
+
+```
+
+```{r}
+#Normalize raw count data using median of ratios method from DESEQ and compare with rlog data
+
+#with a pseudo count 
+#klCountData_psuedo <- klCountData + 1/2
+#KiR <- apply(klCountData_psuedo,1,function(x) (prod(x))^(1/ncol(klCountData_psuedo)))
+#Kij_KiR  <- apply(klCountData_psuedo,2,function(x) x/KiR)
+
+#Without a pseudo count
+KiR <- apply(klCountData,1,function(x) (prod(x))^(1/ncol(klCountData)))
+Kij_KiR  <- apply(klCountData,2,function(x) x/KiR)
+
+#Visualizing histogram of each gene's ratio before picking the median. 
+Kij_KiR_melted <- melt(as.data.frame(Kij_KiR))
+ggplot(Kij_KiR_melted,aes(x = value)) + 
+    facet_wrap(~variable) + 
+    geom_histogram(binwidth = 0.1) +
+    coord_cartesian(xlim = c(0, 6)) 
+#WT Plus has a tighter distribution of counts - and that means that the sum which I was normalizing by before doesn't correlate well with the median of ratios. 
+sj <- apply(Kij_KiR,2, function(x) median(x,na.rm = TRUE))
+klCountData_norm <- t(apply(klCountData,1, function(x) x/sj))
+# scatterplot matrix 
+splom(klCountData_norm, 
+  	main="KL data",
+  	pscales = 0)
+
+par(mfrow=c(2,3))
+xlabels = c("AS1_minus","AS1_minus", "WT_minus")
+ylabels = c("AS2_minus","AS1_plus", "WT_plus")
+for (jj in c(1:length(xlabels))){
+    plot(klCountData_norm[,xlabels[jj]],klCountData_norm[,ylabels[jj]], xlab = "",  ylab = ylabels[jj])
+}
+for (jj in c(1:length(xlabels))){
+    plot(rlog_all[,xlabels[jj]],rlog_all[,ylabels[jj]],xlab = xlabels[jj], ylab = ylabels[jj])
+}
+
+write.csv(as.data.frame(klCountData_norm), 
+          file="C:/Users/Ben/Documents/GitHub/expression_broad_data/expression_data/kl_PKA_as_20160824/norm_KLacdata.csv")
+```
+
+
+
+```{r}
+#Reduce experiment to just the two AS_minus and AS_plus experiments and get DESEQ fold changes
+
+klCountData_plusminus <- klCountData[,c("AS1_minus","AS2_minus", "AS1_plus","AS2_plus")]
+klMetaData_plusminus <- klMetaData[c("AS1_minus","AS2_minus","AS1_plus","AS2_plus"), ,drop = FALSE]
+
+dds_plusminus = DESeqDataSetFromMatrix(countData = klCountData_plusminus, colData = klMetaData_plusminus, design = ~condition)
+dds_plusminus$condition <- factor(dds_plusminus$condition, levels = c("AS_minus", "AS_plus"))
+dds_plusminus_out = DESeq(dds_plusminus)
+plotDispEsts(dds_plusminus_out)
+res = results(dds_plusminus_out,  alpha = 10e-100)
+resMLE <- results(dds_plusminus_out, addMLE=TRUE,  alpha = 10e-100)
+plotMA(res, main = "KL AS- VS AS+", ylim = c(-6,6))
+par(mfrow=c(1,2))
+plotMA(res, main = "shrunken LFC", ylim = c(-6,6))
+plotMA(resMLE, MLE=TRUE, main="unshrunken LFC", ylim=c(-6,6))
+#Sort results and write as a .csv file
+resOrdered <- res[order(res$padj),]
+write.csv(as.data.frame(resOrdered), 
+          file="C:/Users/Ben/Documents/GitHub/expression_broad_data/expression_data/kl_PKA_as_20160824/DESEQ_KLac_ASmin_ASplus.csv")
+```
+
+```{r}
+#DESeq LFC data for KLac WT_minus/AS_minus/WT_plus v.s. KLac AS_plus 
+#treating everything except AS_plus as a minus
+
+klCountData_WTvAS <- klCountData[,c("WT_minus","AS1_plus","AS2_plus")]
+klMetaData_WTvAS <- klMetaData[c("WT_minus","AS1_plus","AS2_plus"), , drop = FALSE]
+
+dds_WTvAS = DESeqDataSetFromMatrix(countData = klCountData_WTvAS, colData = klMetaData_WTvAS, design = ~condition)
+dds_WTvAS$condition <- factor(dds_WTvAS$condition, levels = c("WT_minus", "AS_plus"))
+
+paste(nrow(dds_WTvAS[ rowSums(counts(dds_WTvAS)) <= 1, ]), "items removed from Kl count data because there were no counts")
+dds_WTvAS_filtered = dds_WTvAS[ rowSums(counts(dds_WTvAS)) > 1, ]
+
+dds_WTvAS_out = DESeq(dds_WTvAS_filtered)
+plotDispEsts(dds_WTvAS_out)
+res_WTvAS = results(dds_WTvAS_out,  alpha = 10e-8)
+resMLE_WTvAS <- results(dds_WTvAS_out, addMLE=TRUE,  alpha = 10e-8)
+plotMA(res_WTvAS, main = "KL WT- VS AS+", ylim = c(-6,6))
+par(mfrow=c(1,2))
+plotMA(res_WTvAS, main = "shrunken LFC", ylim = c(-6,6))
+plotMA(resMLE_WTvAS, MLE=TRUE, main="unshrunken LFC", ylim=c(-6,6))
+#Sort results and write as a .csv file
+resOrdered_WTvAS <- res_WTvAS[order(res_WTvAS$padj),]
+write.csv(as.data.frame(resOrdered_WTvAS),
+           file="C:/Users/Ben/Documents/GitHub/expression_broad_data/expression_data/kl_PKA_as_20160824/DESEQ_KLac_WTmin_ASplus.csv")
+
+
+```
+
+Strange that the ratio of medians normalized data doesn't really seem to have a normalized sum: 
+> apply(klCountData_psuedo,2,sum)
+AS1_plus AS2_plus WT_minus  WT_plus 
+13836185 15081192 18936631 13403258 
+> apply(klCountData_norm,2,sum)
+AS1_plus AS2_plus WT_minus  WT_plus 
+14825647 14864233 17170150 13906631
+
+Removing NA instead of adding a pseudocount: 
+> apply(klCountData,2,sum)
+AS1_plus AS2_plus WT_minus  WT_plus 
+13833701 15078708 18934147 13400774 
+> apply(klCountData_norm,2,sum)
+AS1_plus AS2_plus WT_minus  WT_plus 
+14820140 14861583 17166059 13902784 
+
+I wonder why they used that? 
+
+```{r}
+source("https://bioconductor.org/biocLite.R")
+biocLite("DESeq2")
+```
+
+
+
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
