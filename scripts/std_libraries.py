@@ -1,8 +1,9 @@
 #to keep my scripts consistent, I am adding this to the top of all scripts with %load std_libraries.py
 import sys
 #Indicate operating environment and import core modules
-location_input = input("what computer are you on? a = Bens, b = gpucluster, c = other   ")
-location_dict = {'a': "C:\\Users\\heine\\github\\expression_broad_data", 'b': "/home/heineike/github/expression_broad_data",'c':'you need to add your location to the location_dict'}
+location_input = input("what computer are you on? a = Ben's laptop, b = gpucluster, c = Ben's desktop, d = other")
+location_dict = {'a': "C:\\Users\\heine\\github\\expression_broad_data", 'b': "/home/heineike/github/expression_broad_data",
+                 'c': "C:\\Users\\Ben\\Documents\\GitHub\\expression_broad_data", 'd':'you need to add your location to the location_dict'}
 base_dir = location_dict[location_input]
 print("base directory is " + base_dir)
 
