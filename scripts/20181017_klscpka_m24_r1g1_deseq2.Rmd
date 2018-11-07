@@ -1,0 +1,357 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+```{r}
+## try http:// if https:// URLs are not supported
+#source("https://bioconductor.org/biocLite.R")
+#biocLite()
+
+# I think only this one is needed once when using on a new environment
+## try http:// if https:// URLs are not supported
+# source("https://bioconductor.org/biocLite.R")
+# biocLite("DESeq2")
+# print("loaded 20181030")
+```
+```{r}
+library(DESeq2)
+library(ggplot2)
+library(reshape2)
+library(lattice)
+
+base_dir = "C:\\Users\\BMH_work\\github\\expression_broad_data\\expression_data\\kl_sc_PKA_as_m24_r1g1_20181017\\"
+print(base_dir)
+```
+
+
+```{r}
+#Load raw count data for each species from experiment.
+
+countDataList = list(KL = NULL,SC  = NULL)
+metaDataList = list(KL = NULL,SC  = NULL)
+
+
+for (exp_species in c("KL","SC")){
+  print(paste("species is ", exp_species))
+  cts <- paste(base_dir,"20181017_countdata_postQC_",exp_species,".csv",sep = "")
+  countData = read.csv(cts, row.names = 1, header = TRUE)
+  #selecting out a subset: 
+  # countData = countData[,c("7001","7002")]
+   
+  #this metadata file comes from the python script 20181025_sequencingQC_and_counts_file.ipynb.
+  meta <- paste(base_dir,"20181017_metadata_deseq_",exp_species,".csv",sep = "")
+  metaData = read.csv(meta, row.names = 1)
+  colnames(countData) = row.names(metaData)
+  countDataList[[exp_species]]=countData
+  metaDataList[[exp_species]]=metaData
+  print(metaData)
+  print(countData)
+
+  #Turns all count data into a DESeqDataSet
+  dds_all = DESeqDataSetFromMatrix(countData = countData, colData = metaData, design = ~pka_AS_mut+tf_del+NMPP1+replicate)
+  print(dds_all)
+  #If there are any rows with zero or one count, this command removes them, (in this dataset there are not)
+  paste(nrow(dds_all[ rowSums(counts(dds_all)) <= 1, ]), "items removed from Kl count data because there were no counts")
+  dds_all_filtered = dds_all[ rowSums(counts(dds_all)) > 1, ]
+
+  #Finds rlog values and prints to file
+
+  #uses all default options except blind = FALSE instead of true
+  #Note from documentation:
+  #If many of genes have large differences in counts due to the experimental design,it is important to set blind=FALSE for downstream analysis.
+
+  rld_all <- rlog(dds_all_filtered, blind = FALSE)  #, fitType = 'local')
+  rlog_all <- assay(rld_all)
+  #head(rlog_all)
+  #plot(rlog_all[,"7050"],rlog_all[,"7002"])
+
+  #write.csv(as.data.frame(rlog_all), file=paste(base_dir,"20181017_rlog_all_",exp_species,".csv",sep = ""))
+
+
+}
+
+
+# klMetaData <- metaData[c("AS1_minus","AS2_minus", "WT_minus","WT_plus", "AS1_plus","AS2_plus"),]
+# #Combines final two columns of metadata
+# klMetaData$condition = paste(klMetaData$strain,klMetaData$NMPP1,sep="_")
+# klMetaData = klMetaData[ , "condition", drop = FALSE]
+# klMetaData$condition = as.factor(klMetaData$condition)  #Avoid error message since this starts as a character. 
+```
+
+
+```{r}
+#Focus on just SC WT samples with Rph1/Gis1 deletions, no drug
+
+samples_WT_r1g1 <- c("7001","7002","7033","7034","7057","7058")
+
+exp_species = 'SC'
+
+# cts <- paste(base_dir,"20181017_countdata_postQC_",exp_species,".csv",sep = "")
+# countData = read.csv(cts, row.names = 1, header = TRUE)
+
+countData = countDataList[[exp_species]]
+metaData = metaDataList[[exp_species]]
+
+countData_exp <- countData[,samples_WT_r1g1]
+metaData_exp <- metaData[samples_WT_r1g1, "tf_del" ,drop = FALSE]
+  
+countData_exp
+metaData_exp
+  
+
+dds_exp = DESeqDataSetFromMatrix(countData = countData_exp, colData = metaData_exp, design = ~tf_del)
+dds_exp$tf_del <- factor(dds_exp$tf_del, levels = c("WT", "RG"))
+
+#removing genes with no counts
+paste(nrow(dds_exp[ rowSums(counts(dds_exp)) <= 1, ]), "items removed from Kl count data because there were no counts")
+dds_exp_filtered = dds_exp[ rowSums(counts(dds_exp)) > 1, ]
+
+dds_exp_out = DESeq(dds_exp_filtered)
+plotDispEsts(dds_exp_out)
+
+
+
+res = results(dds_exp_out,  alpha = 10e-100)
+print(res)
+plotMA(res, main = paste(exp_species,"Rph1/Gis1 Delete v.s. WT"), ylim = c(-6,6))
+#Sort results and write as a .csv file
+resOrdered <- res[order(res$padj),]
+write.csv(as.data.frame(resOrdered), file=paste(base_dir,"20181017_deseq_SC_WT_wtVr1g1_",exp_species,".csv",sep = ""))
+
+
+```
+
+
+
+```{r}
+#Focus on SC and KL samples in AS with Rph1/Gis1 deletions, no drug
+
+for (exp_species in c("KL","SC")){
+
+  countData = countDataList[[exp_species]]
+  metaData = metaDataList[[exp_species]]
+
+  metaData_exp = metaData[(metaData$tf_del %in% c('WT','RG')) & (metaData$pka_AS_mut == 'AS') & (metaData$NMPP1 == 'cont')& (metaData$replicate != 'BR'),c('tf_del'), drop=FALSE]
+
+  sampleIds = row.names(metaData_exp)
+
+  countData_exp <- countData[,sampleIds]
+    
+  
+  dds_exp = DESeqDataSetFromMatrix(countData = countData_exp, colData = metaData_exp, design = ~tf_del)
+  dds_exp$tf_del <- factor(dds_exp$tf_del, levels = c("WT", "RG"))
+  
+  #removing genes with no counts
+  paste(nrow(dds_exp[ rowSums(counts(dds_exp)) <= 1, ]), "items removed from Kl count data because there were no counts")
+  dds_exp_filtered = dds_exp[ rowSums(counts(dds_exp)) > 1, ]
+  
+  dds_exp_out = DESeq(dds_exp_filtered)
+  plotDispEsts(dds_exp_out)
+  
+  
+  
+  res = results(dds_exp_out,  alpha = 10e-100)
+  print(res)
+  plotMA(res, main = paste(exp_species," Rph1/Gis1 Delete v.s. WT"), ylim = c(-6,6))
+  #Sort results and write as a .csv file
+  resOrdered <- res[order(res$padj),]
+  write.csv(as.data.frame(resOrdered), file=paste(base_dir,"20181017_deseq_AS_wtVr1g1_",exp_species,".csv",sep = ""))
+
+
+}
+
+```
+
+
+
+```{r}
+#Make deseq comparison with interaction term for AS and msn24del strains in +/- NMPP1 conditions
+
+results_alpha = 10e-100
+#default is actually 0.1 - why do I have it set so low?  Does it make a difference? 
+
+for (exp_species in c("KL","SC")){
+
+  # cts <- paste(base_dir,"20181017_countdata_postQC_",exp_species,".csv",sep = "")
+  # countData = read.csv(cts, row.names = 1, header = TRUE)
+  
+  countData = countDataList[[exp_species]]
+  metaData = metaDataList[[exp_species]]
+  
+  metaData_exp = metaData[(metaData$tf_del %in% c('WT','M24')) & (metaData$pka_AS_mut == 'AS') & (metaData$replicate != 'BR'),c('tf_del','NMPP1')]
+  
+  sampleIds = row.names(metaData_exp)
+  
+  countData_exp <- countData[,sampleIds]
+  
+  #here is the main difference - the design is ~tf_del + NMPP1 + tf_del:NMPP1
+  dds_exp = DESeqDataSetFromMatrix(countData = countData_exp, colData = metaData_exp, design = ~tf_del + NMPP1 + tf_del:NMPP1)
+  dds_exp$tf_del <- factor(dds_exp$tf_del, levels = c("WT", "M24"))
+  dds_exp$NMPP1 <- factor(dds_exp$NMPP1, levels = c("cont", "drug"))
+  
+  #removing genes with 1 or 0 counts
+  paste(nrow(dds_exp[ rowSums(counts(dds_exp)) <= 1, ]), "items removed from count data because there was only 1 or 0 counts")
+  dds_exp_filtered = dds_exp[ rowSums(counts(dds_exp)) > 1, ]
+  
+  dds_exp_out = DESeq(dds_exp_filtered)
+  resultsNames(dds_exp_out)
+  plotDispEsts(dds_exp_out)
+  
+  rld <- rlog(dds_exp_filtered, blind = FALSE)  #, fitType = 'local')
+  rlog_exp <- assay(rld)
+  
+  fname_suffix = '_AS_m24del_nmpp1_interaction'
+  
+  write.csv(as.data.frame(rlog_exp), file=paste(base_dir,"20181017_rlog_", exp_species, fname_suffix ,".csv",sep = ""))
+  
+  
+  #save the m24del/drug interaction term LFC
+  res = results(dds_exp_out, name="tf_delM24.NMPP1drug", alpha = results_alpha)
+  print(res)
+  plotMA(res)
+  #Sort results and write as a .csv file
+  resOrdered <- res[order(res$padj),]
+  write.csv(as.data.frame(resOrdered),file=paste(base_dir,"20181017_deseq_", exp_species, fname_suffix ,".csv",sep = ""))
+
+}
+
+```
+
+
+
+
+```{r}
+#Focus on just SC WT samples with Msn24 deletions, no drug
+
+results_alpha = 10e-100
+#default is actually 0.1 - why do I have it set so low?  Does it make a difference? 
+
+exp_species = 'SC'
+
+# cts <- paste(base_dir,"20181017_countdata_postQC_",exp_species,".csv",sep = "")
+# countData = read.csv(cts, row.names = 1, header = TRUE)
+
+countData = countDataList[[exp_species]]
+metaData = metaDataList[[exp_species]]
+
+metaData_exp = metaData[(metaData$tf_del %in% c('WT','M24')) & (metaData$pka_AS_mut == 'WT') & (metaData$NMPP1 == 'cont'),'tf_del', drop=FALSE]
+
+sampleIds = row.names(metaData_exp)
+
+countData_exp <- countData[,sampleIds]
+  
+
+dds_exp = DESeqDataSetFromMatrix(countData = countData_exp, colData = metaData_exp, design = ~tf_del)
+dds_exp$tf_del <- factor(dds_exp$tf_del, levels = c("WT", "M24"))
+
+#removing genes with no counts
+paste(nrow(dds_exp[ rowSums(counts(dds_exp)) <= 1, ]), "items removed from Kl count data because there were no counts")
+dds_exp_filtered = dds_exp[ rowSums(counts(dds_exp)) > 1, ]
+
+dds_exp_out = DESeq(dds_exp_filtered)
+plotDispEsts(dds_exp_out)
+
+
+res = results(dds_exp_out,  alpha = 10e-100)
+print(res)
+plotMA(res, main = paste(exp_species,"Msn24 Delete v.s. WT"), ylim = c(-6,6))
+#Sort results and write as a .csv file
+resOrdered <- res[order(res$padj),]
+write.csv(as.data.frame(resOrdered), file=paste(base_dir,"20181017_deseq_SC_WT_wtVm24res_",exp_species,".csv",sep = ""))
+
+
+```
+
+```{r}
+#Focus on AS samples in both species with Msn24 deletions, no drug
+
+results_alpha = 10e-100
+#default is actually 0.1 - why do I have it set so low?  Does it make a difference? 
+
+
+for (exp_species in c("KL","SC")){
+  
+  # cts <- paste(base_dir,"20181017_countdata_postQC_",exp_species,".csv",sep = "")
+  # countData = read.csv(cts, row.names = 1, header = TRUE)
+  
+  countData = countDataList[[exp_species]]
+  metaData = metaDataList[[exp_species]]
+  
+  metaData_exp = metaData[(metaData$tf_del %in% c('WT','M24')) & (metaData$pka_AS_mut == 'AS') & (metaData$NMPP1 == 'cont') & (metaData$replicate != 'BR'),'tf_del', drop=FALSE]
+  
+  sampleIds = row.names(metaData_exp)
+  
+  countData_exp <- countData[,sampleIds]
+    
+  
+  dds_exp = DESeqDataSetFromMatrix(countData = countData_exp, colData = metaData_exp, design = ~tf_del)
+  dds_exp$tf_del <- factor(dds_exp$tf_del, levels = c("WT", "M24"))
+  
+  #removing genes with no counts
+  paste(nrow(dds_exp[ rowSums(counts(dds_exp)) <= 1, ]), "items removed from Kl count data because there were no counts")
+  dds_exp_filtered = dds_exp[ rowSums(counts(dds_exp)) > 1, ]
+  
+  dds_exp_out = DESeq(dds_exp_filtered)
+  plotDispEsts(dds_exp_out)
+  
+  
+  res = results(dds_exp_out,  alpha = 10e-100)
+  print(res)
+  plotMA(res, main = paste(exp_species,"Msn24 Delete v.s. WT"), ylim = c(-6,6))
+  #Sort results and write as a .csv file
+  resOrdered <- res[order(res$padj),]
+  write.csv(as.data.frame(resOrdered), file=paste(base_dir,"20181017_deseq_AS_wtVm24_",exp_species,".csv",sep = ""))
+}
+
+```
+
+
+
+```{r}
+# #This raw count data will be easier for me to do in python.  
+# #Normalize raw count data using median of ratios method from DESEQ and compare with rlog data
+# 
+# #with a pseudo count 
+# #klCountData_psuedo <- klCountData + 1/2
+# #KiR <- apply(klCountData_psuedo,1,function(x) (prod(x))^(1/ncol(klCountData_psuedo)))
+# #Kij_KiR  <- apply(klCountData_psuedo,2,function(x) x/KiR)
+# 
+# #Without a pseudo count
+# KiR <- apply(klCountData,1,function(x) (prod(x))^(1/ncol(klCountData)))
+# Kij_KiR  <- apply(klCountData,2,function(x) x/KiR)
+# 
+# #Visualizing histogram of each gene's ratio before picking the median. 
+# Kij_KiR_melted <- melt(as.data.frame(Kij_KiR))
+# ggplot(Kij_KiR_melted,aes(x = value)) + 
+#     facet_wrap(~variable) + 
+#     geom_histogram(binwidth = 0.1) +
+#     coord_cartesian(xlim = c(0, 6)) 
+# #WT Plus has a tighter distribution of counts - and that means that the sum which I was normalizing by before doesn't correlate well with the median of ratios. 
+# sj <- apply(Kij_KiR,2, function(x) median(x,na.rm = TRUE))
+# klCountData_norm <- t(apply(klCountData,1, function(x) x/sj))
+# # scatterplot matrix 
+# splom(klCountData_norm, 
+#   	main="KL data",
+#   	pscales = 0)
+# 
+# par(mfrow=c(2,3))
+# xlabels = c("AS1_minus","AS1_minus", "WT_minus")
+# ylabels = c("AS2_minus","AS1_plus", "WT_plus")
+# for (jj in c(1:length(xlabels))){
+#     plot(klCountData_norm[,xlabels[jj]],klCountData_norm[,ylabels[jj]], xlab = "",  ylab = ylabels[jj])
+# }
+# for (jj in c(1:length(xlabels))){
+#     plot(rlog_all[,xlabels[jj]],rlog_all[,ylabels[jj]],xlab = xlabels[jj], ylab = ylabels[jj])
+# }
+# 
+# write.csv(as.data.frame(klCountData_norm), 
+#           file="C:/Users/Ben/Documents/GitHub/expression_broad_data/expression_data/kl_PKA_as_20160824/norm_KLacdata.csv")
+```
+
+
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).

@@ -13,13 +13,19 @@ import matplotlib.pyplot as plt
 from Bio.Seq import Seq
 from Bio.Alphabet import generic_dna
 from ete3 import Tree
+#ete3 is not officially supported on windows, and so must be loaded via pip: 
+# pip install -U https://github.com/etetoolkit/ete/archive/qt5.zip
+# ref: https://groups.google.com/forum/#!topic/etetoolkit/6NblSBPij4o
+#20181031: got this error message: twisted 18.7.0 requires PyHamcrest>=1.9.0, which is not installed.
+
 import requests
 from lxml import etree    #parses xml output
 from itertools import product
 
 #Indicate operating environment and import core modules
-location_input = input("what computer are you on? a = Bens, b = gpucluster, c = other   ")
-location_dict = {'a': "C:\\Users\\heine\\github\\expression_broad_data", 'b': "/home/heineike/github/expression_broad_data",'c':'you need to add your location to the location_dict'}
+location_input = input("what computer are you on? a = Ben's laptop, b = gpucluster, c = Ben's desktop, d = other")
+location_dict = {'a': "C:\\Users\\BMH_work\\github\\expression_broad_data", 'b': "/home/heineike/github/expression_broad_data",
+                 'c': "C:\\Users\\Ben\\Documents\\GitHub\\expression_broad_data", 'd':'you need to add your location to the location_dict'}
 base_dir = location_dict[location_input]
 print("base directory is " + base_dir)
 data_processing_dir = base_dir + os.sep + os.path.normpath("expression_data") + os.sep
