@@ -12,7 +12,7 @@ print('I am importing io_library')
 import matplotlib.pyplot as plt
 from Bio.Seq import Seq
 from Bio.Alphabet import generic_dna
-from ete3 import Tree
+#from ete3 import Tree
 #ete3 is not officially supported on windows, and so must be loaded via pip: 
 # pip install -U https://github.com/etetoolkit/ete/archive/qt5.zip
 # ref: https://groups.google.com/forum/#!topic/etetoolkit/6NblSBPij4o
