@@ -1,8 +1,9 @@
 #to keep my scripts consistent, I am adding this to the top of all scripts with %load std_libraries.py
 import sys
 #Indicate operating environment and import core modules
-location_input = input("what computer are you on? a = Bens, b = gpucluster, c = other   ")
-location_dict = {'a': "C:\\Users\\heine\\github\\expression_broad_data", 'b': "/home/heineike/github/expression_broad_data",'c':'you need to add your location to the location_dict'}
+location_input = input("what computer are you on? a = Ben's laptop, b = gpucluster, c = Ben's desktop, d = other")
+location_dict = {'a': "C:\\Users\\BMH_work\\github\\expression_broad_data", 'b': "/home/heineike/github/expression_broad_data",
+                 'c': "C:\\Users\\Ben\\Documents\\GitHub\\expression_broad_data", 'd':'you need to add your location to the location_dict'}
 base_dir = location_dict[location_input]
 print("base directory is " + base_dir)
 
@@ -29,6 +30,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 #import matplotlib.colormap as cm
 #from matplotlib_venn import venn2
+#for my windows10 laptop I had to install this package using pip rather than anaconda.  
 #import seaborn as sns; sns.set(style="ticks", color_codes=True)
 #from sklearn import linear_model
 #import pickle
@@ -60,6 +62,9 @@ if online_input == "Yes":
     
 # for phylogenetic trees: 
 # from ete3 import Tree
+#ete3 is not officially supported on windows, and so must be loaded via pip: 
+# pip install -U https://github.com/etetoolkit/ete/archive/qt5.zip
+# ref: https://groups.google.com/forum/#!topic/etetoolkit/6NblSBPij4o
 
 #for scraping internet data (e.g. ncbi)
 #import requests

@@ -12,14 +12,21 @@ print('I am importing io_library')
 import matplotlib.pyplot as plt
 from Bio.Seq import Seq
 from Bio.Alphabet import generic_dna
-from ete3 import Tree
+#from ete3 import Tree
+#ete3 is not officially supported on windows, and so must be loaded via pip: 
+# pip install -U https://github.com/etetoolkit/ete/archive/qt5.zip
+# ref: https://groups.google.com/forum/#!topic/etetoolkit/6NblSBPij4o
+#20181031: got this error message: twisted 18.7.0 requires PyHamcrest>=1.9.0, which is not installed.
+
 import requests
 from lxml import etree    #parses xml output
 from itertools import product
+import pickle
 
 #Indicate operating environment and import core modules
-location_input = input("what computer are you on? a = Bens, b = gpucluster, c = other   ")
-location_dict = {'a': "C:\\Users\\heine\\github\\expression_broad_data", 'b': "/home/heineike/github/expression_broad_data",'c':'you need to add your location to the location_dict'}
+location_input = input("what computer are you on? a = Ben's laptop, b = gpucluster, c = Ben's desktop, d = other")
+location_dict = {'a': "C:\\Users\\BMH_work\\github\\expression_broad_data", 'b': "/home/heineike/github/expression_broad_data",
+                 'c': "C:\\Users\\Ben\\Documents\\GitHub\\expression_broad_data", 'd':'you need to add your location to the location_dict'}
 base_dir = location_dict[location_input]
 print("base directory is " + base_dir)
 data_processing_dir = base_dir + os.sep + os.path.normpath("expression_data") + os.sep
@@ -497,10 +504,10 @@ def parse_data_series_matrix_SC(desired_conditions, data_dir, GEO_accession):
 
 def load_oshea_NMPP1_data(): 
     #Import SCer NMPP1 microarray data from O'shea microarrays
-    title_list = '"treatment: 0 min: No 1-NM-PP1"	"treatment: 10 min: 3 µM 1-NM-PP1"	"treatment: 20 min: 3 µM 1-NM-PP1"	"treatment: 30 min: 3 µM 1-NM-PP1"	"treatment: 40 min: 3 µM 1-NM-PP1"	"treatment: 50 min: No 1-NM-PP1"	"treatment: 60 min: No 1-NM-PP1"	"treatment: 70 min: No 1-NM-PP1"	"treatment: 0 min: No 1-NM-PP1"	"treatment: 10 min: 3 µM 1-NM-PP1"	"treatment: 20 min: 3 µM 1-NM-PP1"	"treatment: 30 min: No 1-NM-PP1"	"treatment: 40 min: No 1-NM-PP1"	"treatment: 50 min: No 1-NM-PP1"	"treatment: 60 min: No 1-NM-PP1"	"treatment: 70 min: No 1-NM-PP1"	"treatment: 0 min: No 1-NM-PP1"	"treatment: 10 min: 120 nM 1-NM-PP1"	"treatment: 20 min: 120 nM 1-NM-PP1"	"treatment: 30 min: No 1-NM-PP1"	"treatment: 40 min: No 1-NM-PP1"	"treatment: 50 min: No 1-NM-PP1"	"treatment: 60 min: No 1-NM-PP1"	"treatment: 70 min: No 1-NM-PP1"	"treatment: 0 min: No 1-NM-PP1"	"treatment: 5 min: 750 nM 1-NM-PP1"	"treatment: 10 min: No 1-NM-PP1"	"treatment: 15 min: 750 nM 1-NM-PP1"	"treatment: 20 min: No 1-NM-PP1"	"treatment: 25 min: 750 nM 1-NM-PP1"	"treatment: 30 min: No 1-NM-PP1"	"treatment: 35 min_chip_1: 750 nM 1-NM-PP1"	"treatment: 35 min_chip 2: 750 nM 1-NM-PP1"	"treatment: 40 min: No 1-NM-PP1"	"treatment: 45 min: 750 nM 1-NM-PP1"	"treatment: 50 min: No 1-NM-PP1"	"treatment: 55 min: 750 nM 1-NM-PP1"	"treatment: 60 min: No 1-NM-PP1"	"treatment: 65 min: No 1-NM-PP1"	"treatment: 70 min: No 1-NM-PP1"	"treatment: 0 min: No 1-NM-PP1"	"treatment: 5 min: 750 nM 1-NM-PP1"	"treatment: 10 min: No 1-NM-PP1"	"treatment: 15 min: No 1-NM-PP1"	"treatment: 20 min: No 1-NM-PP1"	"treatment: 25 min: 750 nM 1-NM-PP1"	"treatment: 30 min_chip_1: No 1-NM-PP1"	"treatment: 35 min: No 1-NM-PP1"	"treatment: 30 min_chip_2: No 1-NM-PP1"	"treatment: 40 min: No 1-NM-PP1"	"treatment: 45 min: 750 nM 1-NM-PP1"	"treatment: 50 min: No 1-NM-PP1"	"treatment: 55 min: No 1-NM-PP1"	"treatment: 60 min: No 1-NM-PP1"	"treatment: 65 min: No 1-NM-PP1"	"treatment: 70 min: No 1-NM-PP1"'
+    title_list = '"treatment: 0 min: No 1-NM-PP1"   "treatment: 10 min: 3 µM 1-NM-PP1"  "treatment: 20 min: 3 µM 1-NM-PP1"  "treatment: 30 min: 3 µM 1-NM-PP1"  "treatment: 40 min: 3 µM 1-NM-PP1"  "treatment: 50 min: No 1-NM-PP1"    "treatment: 60 min: No 1-NM-PP1"    "treatment: 70 min: No 1-NM-PP1"    "treatment: 0 min: No 1-NM-PP1" "treatment: 10 min: 3 µM 1-NM-PP1"  "treatment: 20 min: 3 µM 1-NM-PP1"  "treatment: 30 min: No 1-NM-PP1"    "treatment: 40 min: No 1-NM-PP1"    "treatment: 50 min: No 1-NM-PP1"    "treatment: 60 min: No 1-NM-PP1"    "treatment: 70 min: No 1-NM-PP1"    "treatment: 0 min: No 1-NM-PP1" "treatment: 10 min: 120 nM 1-NM-PP1"    "treatment: 20 min: 120 nM 1-NM-PP1"    "treatment: 30 min: No 1-NM-PP1"    "treatment: 40 min: No 1-NM-PP1"    "treatment: 50 min: No 1-NM-PP1"    "treatment: 60 min: No 1-NM-PP1"    "treatment: 70 min: No 1-NM-PP1"    "treatment: 0 min: No 1-NM-PP1" "treatment: 5 min: 750 nM 1-NM-PP1" "treatment: 10 min: No 1-NM-PP1"    "treatment: 15 min: 750 nM 1-NM-PP1"    "treatment: 20 min: No 1-NM-PP1"    "treatment: 25 min: 750 nM 1-NM-PP1"    "treatment: 30 min: No 1-NM-PP1"    "treatment: 35 min_chip_1: 750 nM 1-NM-PP1" "treatment: 35 min_chip 2: 750 nM 1-NM-PP1" "treatment: 40 min: No 1-NM-PP1"    "treatment: 45 min: 750 nM 1-NM-PP1"    "treatment: 50 min: No 1-NM-PP1"    "treatment: 55 min: 750 nM 1-NM-PP1"    "treatment: 60 min: No 1-NM-PP1"    "treatment: 65 min: No 1-NM-PP1"    "treatment: 70 min: No 1-NM-PP1"    "treatment: 0 min: No 1-NM-PP1" "treatment: 5 min: 750 nM 1-NM-PP1" "treatment: 10 min: No 1-NM-PP1"    "treatment: 15 min: No 1-NM-PP1"    "treatment: 20 min: No 1-NM-PP1"    "treatment: 25 min: 750 nM 1-NM-PP1"    "treatment: 30 min_chip_1: No 1-NM-PP1" "treatment: 35 min: No 1-NM-PP1"    "treatment: 30 min_chip_2: No 1-NM-PP1" "treatment: 40 min: No 1-NM-PP1"    "treatment: 45 min: 750 nM 1-NM-PP1"    "treatment: 50 min: No 1-NM-PP1"    "treatment: 55 min: No 1-NM-PP1"    "treatment: 60 min: No 1-NM-PP1"    "treatment: 65 min: No 1-NM-PP1"    "treatment: 70 min: No 1-NM-PP1"'
     title_list = title_list.split('\t')
     title_list = [item.strip("\"") for item in title_list]
-    id_ref_list = '"GSM812516"	"GSM812517"	"GSM812518"	"GSM812519"	"GSM812520"	"GSM812521"	"GSM812522"	"GSM812523"	"GSM812524"	"GSM812525"	"GSM812526"	"GSM812527"	"GSM812528"	"GSM812529"	"GSM812530"	"GSM812531"	"GSM812532"	"GSM812533"	"GSM812534"	"GSM812535"	"GSM812536"	"GSM812537"	"GSM812538"	"GSM812539"	"GSM812540"	"GSM812541"	"GSM812542"	"GSM812543"	"GSM812544"	"GSM812545"	"GSM812546"	"GSM812547"	"GSM812548"	"GSM812549"	"GSM812550"	"GSM812551"	"GSM812552"	"GSM812553"	"GSM812554"	"GSM812555"	"GSM812556"	"GSM812557"	"GSM812558"	"GSM812559"	"GSM812560"	"GSM812561"	"GSM812562"	"GSM812563"	"GSM812564"	"GSM812565"	"GSM812566"	"GSM812567"	"GSM812568"	"GSM812569"	"GSM812570"	"GSM812571"'
+    id_ref_list = '"GSM812516"  "GSM812517" "GSM812518" "GSM812519" "GSM812520" "GSM812521" "GSM812522" "GSM812523" "GSM812524" "GSM812525" "GSM812526" "GSM812527" "GSM812528" "GSM812529" "GSM812530" "GSM812531" "GSM812532" "GSM812533" "GSM812534" "GSM812535" "GSM812536" "GSM812537" "GSM812538" "GSM812539" "GSM812540" "GSM812541" "GSM812542" "GSM812543" "GSM812544" "GSM812545" "GSM812546" "GSM812547" "GSM812548" "GSM812549" "GSM812550" "GSM812551" "GSM812552" "GSM812553" "GSM812554" "GSM812555" "GSM812556" "GSM812557" "GSM812558" "GSM812559" "GSM812560" "GSM812561" "GSM812562" "GSM812563" "GSM812564" "GSM812565" "GSM812566" "GSM812567" "GSM812568" "GSM812569" "GSM812570" "GSM812571"'
     id_ref_list = id_ref_list.split('\t')
     id_ref_list = [item.strip("\"") for item in id_ref_list]
     
@@ -718,6 +725,7 @@ def load_YGOB_annotations(species, base_dir, species_tab_file):
     
     return annotation_lookup
 
+
 def SC_common_name_lookup(gene_list):
     #SC Common Name lookup
     #Input is a list of orfs, output is a list of common names
@@ -741,6 +749,47 @@ def SC_common_name_lookup(gene_list):
             SC_common_names.append(gene)
     
     return SC_common_names
+
+def SC_common_name_lookup_KL_generate_dict():
+    #Only need to run once. The database is stored as a .pkl file after that
+    #Load ortholog data to add SCer common names for the KL genes.  For orthologs adds both orthologs separated by
+    # an _.  For some reason this takes a while
+    orth_dir = os.path.normpath(data_processing_dir + 'ortholog_files_YGOB') + os.sep
+    orth_lookup = io_library.read_orth_lookup_table('Klac', 'Scer', orth_dir)
+
+    sc_common_name_labels = {}
+
+    for kl_gene, orth_list in orth_lookup.items():
+        #print(kl_gene)
+        label = '_'.join([io_library.SC_common_name_lookup([sc_orf])[0] for sc_orf in orth_list])
+        sc_common_name_labels[kl_gene] = label
+        print(kl_gene + ':' + label)
+
+    pickle.dump(sc_common_name_labels, open(os.path.normpath(data_processing_dir + 'ortholog_files_YGOB/kl_dict_sc_common_name.pkl'),'wb'))
+    
+    print("sc_common_name_labels dict saved at " + data_processing_dir + 'ortholog_files_YGOB/kl_dict_sc_common_name.pkl' )
+    
+    return sc_common_name_labels
+
+def SC_common_name_lookup_KL(kl_genename_list): 
+    #Return a list of SC common names.  If there is a paralog the paralog names are separated by an underscore.  
+    #If there is no ortholog in SC, returns the KL name.  
+
+    #Load labels for K.Lac genes
+    sc_common_name_labels = pickle.load(open(os.path.normpath(data_processing_dir + 'ortholog_files_YGOB/kl_dict_sc_common_name.pkl'),mode='rb'))
+    
+    sc_common_name_label_list = []
+    for kl_gene in kl_genename_list:
+        try: 
+            sc_common_name_label = sc_common_name_labels[kl_gene]
+            if sc_common_name_label == 'NONE':
+                sc_common_name_label = kl_gene
+
+        except KeyError:
+            sc_common_name_label = kl_gene
+        sc_common_name_label_list.append(sc_common_name_label)
+
+    return sc_common_name_label_list 
 
 def SC_orf_lookup_by_name(name_list):
     #Input is a list of common names, output is a list of orfs
@@ -1122,16 +1171,16 @@ def make_foldchange_subsets(kl_sc_PKA_data, pthreshold_KL, pthreshold_SC):
                     }
     return gene_set_dict
 
-def kl_genename_convert(df): 
-    #probably don't really need this one - just list one below. 
-    #Input is dataframe with GFF version of kl genename as the index. 
-    #Ouput is dataframe with standard version of kl genename as the index. 
+# def kl_genename_convert(df): 
+    # #probably don't really need this one - just list one below. 
+    # #Input is dataframe with GFF version of kl genename as the index. 
+    # #Ouput is dataframe with standard version of kl genename as the index. 
 
-    kl_genename = kl_genename_convert(df.index)
-    df['kl_genename'] = kl_genename
-    df.set_index('kl_genename',inplace = True)
+    # kl_genename = kl_genename_convert_list(df.index)
+    # df['kl_genename'] = kl_genename
+    # df.set_index('kl_genename',inplace = True)
 
-    return df
+    # return df
 
 def kl_genename_convert_list(kl_genes): 
     kl_genename = []

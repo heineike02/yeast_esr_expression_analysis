@@ -3,3 +3,4 @@ expression_data/
 scripts/kl_unmatched_ortholog_files/
 scripts/.ipynb_checkpoints/
 core/__pycache__/
+*.pyc
