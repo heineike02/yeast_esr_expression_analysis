@@ -6,6 +6,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt 
 import matplotlib as mpl
 from IPython.core.debugger import Tracer
+import plotly.graph_objs as pygo
  
 def stability_calc(condition_values, weight_vector): 
     weighted_values = np.multiply(condition_values,weight_vector)
@@ -208,3 +209,77 @@ def multi_scatter_plot(expression_data, conditions, xlimit = [], xticks = [], yl
             if jj == 0:
                 ax.set_title(conditions[kk])
     return fig, axarr
+    
+def lfc_padj_plot_with_lines(x_data,y_data,hover_text,line_coords):
+    #line_coords is of the form: [(x1,y1),(x2,y2), ymin]
+    x1,y1 = line_coords[0]
+    x2,y2 = line_coords[1]
+    ymin = line_coords[2]
+    
+
+    data = []
+
+    trace = pygo.Scatter(
+                x = x_data, 
+                y =  y_data,
+                text = hover_text,
+                mode = 'markers',
+                marker = {'opacity': 0.5}, 
+                          #'color': 'rgba'+str(cmap(NN/10))}, 
+                name = 'genes'
+            )
+        
+    data.append(trace)
+
+    x = np.array([x1,x2])
+
+    trace2 = pygo.Scatter(
+        x = x,
+        y = y2- (y2-y1)/(x2-x1)*(x2-x),
+        mode = 'lines',
+        marker = {'color': 'black',
+                  'size': 5},
+        name = 'LFC/padj threshold'
+    )
+
+    data.append(trace2)
+    
+    if y2-y1<0: #Line has negative slope - looking at right side of axis
+        x_at_ymin1 = x1
+        x_at_ymin2 = max(x_data)
+        
+    elif y2-y1 >0:   #Line has positive slope - looking at left side of axis
+        x_at_ymin1 = x2
+        x_at_ymin2 = min(x_data)
+    
+    x = np.array([x_at_ymin1, x_at_ymin2])
+    y = np.array([ymin, ymin])
+
+    trace3 = pygo.Scatter(
+        x = x,
+        y = y,
+        mode = 'lines',
+        marker = {'color': 'black',
+                  'size': 5},
+        name = 'padj threshold'
+    )
+
+
+    data.append(trace3)
+
+    layout = pygo.Layout(
+        xaxis= {
+            #"range":[-2, 20],
+            "title":'LFC'
+        },
+        yaxis= {
+            #"range":[-2, 20],
+            "title":'-log10(padj)'
+        }
+    )
+
+
+    fig = pygo.Figure(data=data, layout = layout) 
+    
+    return fig
+

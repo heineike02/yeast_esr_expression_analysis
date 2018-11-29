@@ -30,8 +30,9 @@ print(base_dir)
 countDataList = list(KL = NULL,SC  = NULL)
 metaDataList = list(KL = NULL,SC  = NULL)
 
+exp_species="KL"
 
-for (exp_species in c("KL","SC")){
+#for (exp_species in c("KL","SC")){
   print(paste("species is ", exp_species))
   cts <- paste(base_dir,"20181017_countdata_postQC_",exp_species,".csv",sep = "")
   countData = read.csv(cts, row.names = 1, header = TRUE)
@@ -65,10 +66,10 @@ for (exp_species in c("KL","SC")){
   #head(rlog_all)
   #plot(rlog_all[,"7050"],rlog_all[,"7002"])
 
-  #write.csv(as.data.frame(rlog_all), file=paste(base_dir,"20181017_rlog_all_",exp_species,".csv",sep = ""))
+  write.csv(as.data.frame(rlog_all), file=paste(base_dir,"20181017_rlog_all_",exp_species,".csv",sep = ""))
 
 
-}
+#}
 
 
 # klMetaData <- metaData[c("AS1_minus","AS2_minus", "WT_minus","WT_plus", "AS1_plus","AS2_plus"),]
@@ -126,7 +127,9 @@ write.csv(as.data.frame(resOrdered), file=paste(base_dir,"20181017_deseq_",exp_s
 ```{r}
 #Focus on SC and KL samples in AS with Rph1/Gis1 deletions, no drug
 
-for (exp_species in c("KL","SC")){
+exp_species="KL"
+
+#for (exp_species in c("KL","SC")){
 
   countData = countDataList[[exp_species]]
   metaData = metaDataList[[exp_species]]
@@ -158,7 +161,7 @@ for (exp_species in c("KL","SC")){
   write.csv(as.data.frame(resOrdered), file=paste(base_dir,"20181017_deseq_",exp_species,"_AS_wtVr1g1.csv",sep = ""))
 
 
-}
+#}
 
 ```
 
@@ -170,7 +173,9 @@ for (exp_species in c("KL","SC")){
 results_alpha = 10e-100
 #default is actually 0.1 - why do I have it set so low?  Does it make a difference? 
 
-for (exp_species in c("KL","SC")){
+exp_species="KL"
+
+#for (exp_species in c("KL","SC")){
 
   # cts <- paste(base_dir,"20181017_countdata_postQC_",exp_species,".csv",sep = "")
   # countData = read.csv(cts, row.names = 1, header = TRUE)
@@ -212,7 +217,7 @@ for (exp_species in c("KL","SC")){
   resOrdered <- res[order(res$padj),]
   write.csv(as.data.frame(resOrdered),file=paste(base_dir,"20181017_deseq_", exp_species, fname_suffix ,".csv",sep = ""))
 
-}
+#}
 
 ```
 
@@ -224,7 +229,9 @@ for (exp_species in c("KL","SC")){
 results_alpha = 10e-100
 #default is actually 0.1 - why do I have it set so low?  Does it make a difference? 
 
-for (exp_species in c("KL","SC")){
+exp_species = "KL"
+
+#for (exp_species in c("KL","SC")){
 
   # cts <- paste(base_dir,"20181017_countdata_postQC_",exp_species,".csv",sep = "")
   # countData = read.csv(cts, row.names = 1, header = TRUE)
@@ -267,7 +274,7 @@ for (exp_species in c("KL","SC")){
   resOrdered <- res[order(res$padj),]
   write.csv(as.data.frame(resOrdered),file=paste(base_dir,"20181017_deseq_", exp_species, fname_suffix ,".csv",sep = ""))
 
-}
+#}
 
 ```
 
@@ -322,8 +329,8 @@ write.csv(as.data.frame(resOrdered), file=paste(base_dir,"20181017_deseq_",exp_s
 results_alpha = 10e-100
 #default is actually 0.1 - why do I have it set so low?  Does it make a difference? 
 
-
-for (exp_species in c("KL","SC")){
+exp_species="KL"
+#for (exp_species in c("KL","SC")){
   
   # cts <- paste(base_dir,"20181017_countdata_postQC_",exp_species,".csv",sep = "")
   # countData = read.csv(cts, row.names = 1, header = TRUE)
@@ -355,7 +362,7 @@ for (exp_species in c("KL","SC")){
   #Sort results and write as a .csv file
   resOrdered <- res[order(res$padj),]
   write.csv(as.data.frame(resOrdered), file=paste(base_dir,"20181017_deseq_",exp_species,"_AS_wtVm24.csv",sep = ""))
-}
+#}
 
 ```
 
@@ -453,7 +460,9 @@ write.csv(as.data.frame(resOrdered),file=paste(base_dir,"20181017_deseq_", exp_s
 results_alpha = 10e-100
 #default is actually 0.1 - why do I have it set so low?  Does it make a difference? 
 
-for (exp_species in c("KL","SC")){
+exp_species = "KL"
+
+#for (exp_species in c("KL","SC")){
   # cts <- paste(base_dir,"20181017_countdata_postQC_",exp_species,".csv",sep = "")
   # countData = read.csv(cts, row.names = 1, header = TRUE)
   
@@ -526,7 +535,7 @@ for (exp_species in c("KL","SC")){
   #Sort results and write as a .csv file
   resOrdered <- res[order(res$padj),]
   write.csv(as.data.frame(resOrdered),file=paste(base_dir,"20181017_deseq_", exp_species, fname_suffix ,".csv",sep = ""))
-}
+#}
 ```
 
 
