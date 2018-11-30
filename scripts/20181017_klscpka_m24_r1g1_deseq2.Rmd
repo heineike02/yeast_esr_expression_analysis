@@ -30,9 +30,9 @@ print(base_dir)
 countDataList = list(KL = NULL,SC  = NULL)
 metaDataList = list(KL = NULL,SC  = NULL)
 
-exp_species="KL"
+#exp_species="KL"
 
-#for (exp_species in c("KL","SC")){
+for (exp_species in c("KL","SC")){
   print(paste("species is ", exp_species))
   cts <- paste(base_dir,"20181017_countdata_postQC_",exp_species,".csv",sep = "")
   countData = read.csv(cts, row.names = 1, header = TRUE)
@@ -66,10 +66,10 @@ exp_species="KL"
   #head(rlog_all)
   #plot(rlog_all[,"7050"],rlog_all[,"7002"])
 
-  write.csv(as.data.frame(rlog_all), file=paste(base_dir,"20181017_rlog_all_",exp_species,".csv",sep = ""))
+  #write.csv(as.data.frame(rlog_all), file=paste(base_dir,"20181017_rlog_all_",exp_species,".csv",sep = ""))
 
 
-#}
+}
 
 
 # klMetaData <- metaData[c("AS1_minus","AS2_minus", "WT_minus","WT_plus", "AS1_plus","AS2_plus"),]
@@ -173,9 +173,9 @@ exp_species="KL"
 results_alpha = 10e-100
 #default is actually 0.1 - why do I have it set so low?  Does it make a difference? 
 
-exp_species="KL"
+#exp_species="KL"
 
-#for (exp_species in c("KL","SC")){
+for (exp_species in c("KL","SC")){
 
   # cts <- paste(base_dir,"20181017_countdata_postQC_",exp_species,".csv",sep = "")
   # countData = read.csv(cts, row.names = 1, header = TRUE)
@@ -204,7 +204,7 @@ exp_species="KL"
   rld <- rlog(dds_exp_filtered, blind = FALSE)  #, fitType = 'local')
   rlog_exp <- assay(rld)
   
-  fname_suffix = '_AS_nmpp1'
+  fname_suffix = '_AS_WT_nmpp1'
   
   write.csv(as.data.frame(rlog_exp), file=paste(base_dir,"20181017_rlog_", exp_species, fname_suffix ,".csv",sep = ""))
   
@@ -217,7 +217,63 @@ exp_species="KL"
   resOrdered <- res[order(res$padj),]
   write.csv(as.data.frame(resOrdered),file=paste(base_dir,"20181017_deseq_", exp_species, fname_suffix ,".csv",sep = ""))
 
-#}
+}
+
+```
+
+
+
+```{r}
+#Make deseq comparison for AS del Msn24 +/- NMPP1 conditions
+
+results_alpha = 10e-100
+#default is actually 0.1 - why do I have it set so low?  Does it make a difference? 
+
+#exp_species="KL"
+
+for (exp_species in c("KL","SC")){
+
+  # cts <- paste(base_dir,"20181017_countdata_postQC_",exp_species,".csv",sep = "")
+  # countData = read.csv(cts, row.names = 1, header = TRUE)
+  
+  countData = countDataList[[exp_species]]
+  metaData = metaDataList[[exp_species]]
+  
+  metaData_exp = metaData[(metaData$tf_del == 'M24') & (metaData$pka_AS_mut == 'AS') & (metaData$replicate != 'BR'),c('NMPP1'), drop=FALSE]
+  
+  sampleIds = row.names(metaData_exp)
+  
+  countData_exp <- countData[,sampleIds]
+  
+  #here is the main difference - the design is ~NMPP1
+  dds_exp = DESeqDataSetFromMatrix(countData = countData_exp, colData = metaData_exp, design = ~NMPP1)
+  dds_exp$NMPP1 <- factor(dds_exp$NMPP1, levels = c("cont", "drug"))
+  
+  #removing genes with 1 or 0 counts
+  paste(nrow(dds_exp[ rowSums(counts(dds_exp)) <= 1, ]), "items removed from count data because there was only 1 or 0 counts")
+  dds_exp_filtered = dds_exp[ rowSums(counts(dds_exp)) > 1, ]
+  
+  dds_exp_out = DESeq(dds_exp_filtered)
+  resultsNames(dds_exp_out)
+  plotDispEsts(dds_exp_out)
+  
+  rld <- rlog(dds_exp_filtered, blind = FALSE)  #, fitType = 'local')
+  rlog_exp <- assay(rld)
+  
+  fname_suffix = '_AS_M24_nmpp1'
+  
+  write.csv(as.data.frame(rlog_exp), file=paste(base_dir,"20181017_rlog_", exp_species, fname_suffix ,".csv",sep = ""))
+  
+  
+  #save the LFC
+  res = results(dds_exp_out, alpha = results_alpha)
+  print(res)
+  plotMA(res)
+  #Sort results and write as a .csv file
+  resOrdered <- res[order(res$padj),]
+  write.csv(as.data.frame(resOrdered),file=paste(base_dir,"20181017_deseq_", exp_species, fname_suffix ,".csv",sep = ""))
+
+}
 
 ```
 
