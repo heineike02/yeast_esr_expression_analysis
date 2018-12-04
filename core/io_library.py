@@ -1004,7 +1004,7 @@ def run_ame_analysis(spec, target_gene_list, control_gene_list,target_fname_pref
                      promoter_fname = {'KL': 'kl_promoters.pkl', 'SC': 'sc_promoters.pkl'},
                      ame_scoring = 'avg',
                      ame_method = 'ranksum',
-                     ame_pvalue_threshold = '0.05' ):
+                     ame_evalue_threshold = '10' ):
     #runs ame program from meme software for given target gene lit, control gene list and set of motifs. 
     #extract promoters
     #spec: Species - either 'KL' or 'SC'
@@ -1036,48 +1036,48 @@ def run_ame_analysis(spec, target_gene_list, control_gene_list,target_fname_pref
 
     #Use subprocess to run meme commands: 
 
-    #ame --verbose 1 --oc . --control all_kl_promoters.fasta --bgformat 1 --scoring avg --method ranksum --pvalue-report-threshold 0.05 mito_promoters_kl.fasta db/JASPAR/JASPAR_CORE_2016_fungi.meme
     motif_db = os.path.normpath(data_processing_dir + '/motifs/'+ motif['fname'])
     target_sequences = os.path.normpath(promoter_dir[spec] + 'promoter_sets/' + fname_prefixes['target'] + '_promoters.fasta')
     control_sequences = os.path.normpath(promoter_dir[spec] + 'promoter_sets/' + fname_prefixes['control'] + '_promoters.fasta')
     output_dir = os.path.normpath(promoter_dir[spec] + 'ame_output')
-    file_prefix = target_fname_prefix + '_vs_' + control_fname_prefix + '_motif_' + motif['name'] + '_pVal_' + ame_pvalue_threshold
+    file_prefix = target_fname_prefix + '_vs_' + control_fname_prefix + '_motif_' + motif['name'] + '_EVal_' + ame_evalue_threshold + '_' 
 
 
-    ame_command = [ "/home/kieran/meme/bin/ame",
+    #  Version 5 command
+    ame_command = [ "/home/heineike/meme/bin/ame",
                   "--verbose", "2",
                   "--oc", output_dir,
                   "--control", control_sequences,
-                  "--bgformat", "1", 
                   "--scoring", ame_scoring,
                   "--method", ame_method, 
-                  "--pvalue-report-threshold", ame_pvalue_threshold, 
+                  "--evalue-report-threshold", ame_evalue_threshold, 
                   target_sequences,
                   motif_db]
+
+    #  Version 4.0.12 command
+    #    ame_command = [ "/home/kieran/meme/bin/ame",
+    #                  "--verbose", "2",
+    #                  "--oc", output_dir,
+    #                  "--control", control_sequences,
+    #                  "--bgformat", "1", 
+    #                  "--scoring", ame_scoring,
+    #                  "--method", ame_method, 
+    #                  "--pvalue-report-threshold", ame_pvalue_threshold, 
+    #                  target_sequences,
+    #                  motif_db]
+    
+    #print(' '.join(ame_command))    
 
     ame_output = subprocess.run(ame_command,stdout = subprocess.PIPE) 
 
     print("ame output return code = " + str(ame_output.returncode))
 
     #change file prefix
-    for fname in ["ame.txt","ame.html"]:
+    for fname in ["ame.tsv","ame.html"]:
         os.rename(output_dir + os.sep + fname, output_dir + os.sep + file_prefix + fname)
     
     return
 
-
-#def run_meme_analysis(input_promoters_fname, background_promoters_fname):
-#
-#    pspgen_command = [ "/home/kieran/meme/bin/ame",
-#                   "--verbose", "2",
-#                   "--oc", output_dir,
-#                   "--control", control_sequences,
-#                   "--bgformat", "1", 
-#                   "--scoring", ame_scoring,
-#                   "--method", ame_method, 
-#                   "--pvalue-report-threshold", ame_pvalue_threshold, 
-#                   target_sequences,
-#                   motif_db]
 
 def merge_overlap_column(series_a, series_b):
     #for two string columns in an outer merge that should have identical entries except where 
