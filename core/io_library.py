@@ -30,23 +30,67 @@ location_dict = {'a': "C:\\Users\\BMH_work\\github\\expression_broad_data", 'b':
 base_dir = location_dict[location_input]
 print("base directory is " + base_dir)
 data_processing_dir = base_dir + os.sep + os.path.normpath("expression_data") + os.sep
+
+spec_lookup = {'Klac' : 'Kluyveromyces lactis', 'Scer': 'Saccharomyces cerevisiae', 
+ 'Cgla' : 'Candida glabrata' , 'Ncas': 'Naumovozyma castellii', 
+ 'Sbay' : 'Saccharomyces bayanus', 'Smik': 'Saccharomyces mikatae',
+ 'Lwal' : 'Lachancea waltii', 'Spar' : 'Saccharomyces paradoxus', 
+ 'Lklu' : 'Lachancea kluyverii', 'Dhan': 'Debaryomyces hansenii', 
+ 'Calb' : 'Candida albicans', 'Ylip': 'Yarrowia lipolytica'}
+
 print("data processing dir is " + data_processing_dir )
 
-def tryfloatconvert(value, default):
-    try:
-        return float(value)
-    except ValueError:
-        return default
-
-def parse_raw_exp(species):
-    #Parses raw expression data for a given species.  Ouputs a dataframe. 
-    #org_dict = {'Kluyveromyces lactis': ('GSE22198_family.soft','SystematicName','KLac',KL_soft_alt_dict), 'Saccharomyces cerevisiae': ('GSE22204_family.soft','ACCESSION_STRING','SCer',SC_soft_alt_dict)}
-    raw_exp_datasets = {'Kluyveromyces lactis': 'GSE22198_family.soft', 'Saccharomyces cerevisiae': 'GSE22204_family.soft', 'Candida glabrata':'GSE22194_family.soft', 'Naumovozyma castellii' : 'GSE22200_family.soft', 'Saccharomyces bayanus' : 'GSE22205_family.soft', 'Saccharomyces mikatae': 'GSE22201_family.soft', 'Lachancea waltii': 'GSE22199_family.soft', 'Saccharomyces paradoxus': 'GSE22193_family.soft', 'Lacancea kluyverii': 'GSE22202_family.soft', 'Debaryomyces hansenii': 'GSE22191_family.soft'}
-    #raw_exp_fnames = {'Kluyveromyces lactis': 'KLac_raw.csv', 'Saccharomyces cerevisiae': 'SCer_raw.csv'}
-    orf_header_names = {spec : 'SystematicName' for spec in ['Kluyveromyces lactis', 'Candida glabrata', 'Naumovozyma castellii', 'Saccharomyces bayanus', 'Saccharomyces mikatae', 'Lachancea waltii', 'Saccharomyces paradoxus','Debaryomyces hansenii']}
-    orf_header_names['Saccharomyces cerevisiae']='ACCESSION_STRING'
-    orf_header_names['Lacancea kluyverii'] = 'Gene'
+## External Data
+###SGD Data
+def read_SGD_features():
     
+    #Read in orf/name file and make it a dictionary
+    # Gabe 7/12/16
+    # SC_features_fname = os.path.normpath(data_processing_dir + "\ortholog_files\\SGD_features.tab")
+    SC_features_fname = os.path.normpath(data_processing_dir + "/ortholog_files/SGD_features.tab")
+
+    SC_features = pd.read_csv(SC_features_fname, sep = '\t', header=None)
+    SC_orfs = SC_features.groupby(1).get_group('ORF')
+    
+    #Makes a dictionary to look up orfs by gene names.  This won't include all orfs - those without names had NaN in column 4 so 
+    #are presumably left out. 
+    SC_orfs_lookup = dict(zip(SC_orfs[4], SC_orfs[3]))
+    SC_genename_lookup = dict(zip(SC_orfs[3], SC_orfs[4]))
+    SC_features_lookup = dict(zip(SC_orfs[3], SC_orfs[15]))
+       
+    return SC_orfs_lookup, SC_genename_lookup, SC_features_lookup
+
+def get_sgd_description(sc_genename_list):
+    SGD_features = read_SGD_features()
+    description_dict = SGD_features[2]
+
+    description_list = []
+    for gene in sc_genename_list:
+        try: 
+            description = description_dict[gene]
+        except KeyError: 
+            print('description lookup failed for ' + gene)
+            description = "Lookup Failed"
+        description_list.append(description)
+    
+    return description_list
+
+### Other external data
+def parse_raw_exp(spec, fname=None):
+    #for a given species abbreviation and optional filename returns a dataframe with expression data from 
+    #Tsankov et al 2010.   
+    #Returns a dictionary which lists the platform mapping (from microarray to gene) and a dataframe of 
+    #expression values, platform
+    raw_exp_data_inds = {'Klac': 'GSE22198', 'Scer': 'GSE22204', 
+                        'Cgla':'GSE22194', 'Ncas' : 'GSE22200', 
+                        'Sbay' : 'GSE22205', 'Smik': 'GSE22201', 
+                        'Lwal': 'GSE22199', 'Spar': 'GSE22193', 
+                        'Lklu': 'GSE22202', 'Dhan': 'GSE22191', 
+                        'Calb': 'GSE22197', 'Ylip': 'GSE22192'}
+    orf_header_names = {spec : 'SystematicName' for spec in ['Klac', 'Cgla', 'Ncas', 'Sbay', 'Smik', 'Lwal', 'Spar','Dhan', 'Calb', 'Ylip']}
+    orf_header_names['Scer']='ACCESSION_STRING'
+    orf_header_names['Lklu'] = 'Gene'
+
     #data cleaning notes: 
     #Kluyveromyces Lactis: No expression value listed - made NA
     #gene, line
@@ -56,37 +100,37 @@ def parse_raw_exp(species):
     #14052, 14868
     #10964, 17154
     #12500, 18690
-    #Did not need to clean data for other species - made an if loop to catch it. 
-    
+    #Did not need clean data for other species - made an if loop to catch it. 
+
     #KLac had four samples    
-    input_fname = os.path.normpath(data_processing_dir + 'regev_data/raw_exp/' + raw_exp_datasets[species])
-    with open(input_fname) as f:
+    orfmap_fname = os.path.normpath(data_processing_dir + 'regev_data/raw_exp/' + raw_exp_data_inds[spec] + '_family.soft')
+    with open(orfmap_fname) as f:
         # identify samples in the dataset
         # Skips text before the line that says beginning of the interesting block:
         sample_datasets = []
         for line in f:
             if line.split()[0]== '!Series_sample_id':
                 break
-        
+
         sample_datasets.append(line.split()[2])
         #Tracer()()
         for line in f: 
             if line.split()[0] != '!Series_sample_id':
                 break
             sample_datasets.append(line.split()[2])
-        
+
         # get list of orfs with index numbers
-        
+
         # Find line that starts table listing gene names and index numbers
         for line in f: 
             if line.split()[0] == '!platform_table_begin':
                 break
-        
+
         #Find index of header that will identify orf
         line = next(f)
         linesp = line.split()
-        orf_header_ind = linesp.index(orf_header_names[species])
-        
+        orf_header_ind = linesp.index(orf_header_names[spec])
+
         data_dict = {}
         platform_dict = {}
         for line in f: 
@@ -94,66 +138,49 @@ def parse_raw_exp(species):
             if linesp[0] == "!platform_table_end\n":
                 #include new line because this splits on tab.  
                 break 
-            
+
             orf_ind = linesp[0]
             #S. Cerevisiae orf names are formatted differently than other species. 
-            if species == 'Saccharomyces cerevisiae':                       
+            if spec == 'Scer':                       
                 orf_name = linesp[orf_header_ind].split('|')[1]
             else: 
                 orf_name = linesp[orf_header_ind]
-                            
+
             platform_dict[orf_ind] = orf_name  
-        
-        data_dict['orf_name'] = platform_dict
-        
-        #builds a dictionary with primary key and experimental value for each id number. 
-        #adds these as part of the data_dict.  
-        for jj in range(len(sample_datasets)):
-            sample_data = {}
-            #finds sample name: 
-            for line in f: 
-                linesp = line.split()
-                if linesp[0] == '^SAMPLE':
-                    break 
-            sample_name = linesp[2]
-            
-            #builds dictionary of id numbers and experimental values.     
-            for line in f: 
-                linesp = line.split()
-                if linesp[0] == '!sample_table_begin':
-                    break 
-            
-            #skip header line
-            next(f)
-            for line in f: 
-                linesp = line.split()
-                if linesp[0] == '!sample_table_end':
-                    break
-                if len(linesp) == 1:
-                    linesp.append('nan')
-                    print('Species: {}, Line {} was blank, made nan'.format(species, linesp[0]))
-                sample_data[linesp[0]] = tryfloatconvert(linesp[1],np.nan)
-                
-                
-            data_dict[sample_name]=sample_data
-        
-        raw_exp = pd.DataFrame(data_dict) 
-        #make orf index and ID a field
-    
-    #raw_exp[sample_datasets]= raw_exp[sample_datasets].applymap(lambda x: tryfloatconvert(x,np.nan))
-    raw_exp['Mean'] = raw_exp[sample_datasets].mean(axis = 'columns')
-    ids = raw_exp.index
-    raw_exp['ID']=ids
-    orfs = raw_exp['orf_name']
-    raw_exp = raw_exp.set_index('orf_name')
-    orf_lookup = pd.Series(orfs.values, index = ids.values ) 
-    orf_lookup = orf_lookup.sort_index()
-    return raw_exp, orf_lookup                    
-    
+
+    platform_dict
+
+    #Load expression data
+    raw_exp_fname = os.path.normpath(data_processing_dir + 'regev_data/raw_exp/' + raw_exp_data_inds[spec] + '_series_matrix.txt')
+    raw_exp = pd.read_table(raw_exp_fname, comment = '!')
+
+    #Make column for orf names
+    orf_names = [platform_dict[str(platform_id)] for platform_id in raw_exp['ID_REF']]
+    raw_exp['orf_name'] = orf_names
+    raw_exp.drop(columns='ID_REF', inplace = True)
+    #Take median of all data that has more than one spot per orf 
+    #Tsankov et al used median rather than mean so will stay with that. 
+    grouped = raw_exp.groupby('orf_name')
+    raw_exp_med = grouped.median()
+
+    #Quantile normalize data across replicates and then calculate mean of the normal columns. 
+    #I wonder if it would be better to take the median to reduce the effect of outliers?
+    raw_exp_med_qnorm = quantileNormalize(raw_exp_med)
+    raw_exp_med_qnorm['med_qnorm'] = raw_exp_med_qnorm.median(axis = 'columns')
+    raw_exp_med_qnorm['std_qnorm'] = raw_exp_med_qnorm.std(axis = 'columns')
+    raw_exp_out = raw_exp_med.merge(raw_exp_med_qnorm, left_index =True, right_index = True, how = 'outer', suffixes = ('','_qnorm'))
+
+    ## Didn't seem to have a problem with nan's now that I am using pd.read_table.  If it comes up this might help: 
+    # raw_exp[sample_datasets]= raw_exp[sample_datasets].applymap(lambda x: tryfloatconvert(x,np.nan))
+
+    if fname != None: 
+        raw_exp_out.to_csv(fname)
+    return raw_exp_out , platform_dict                    
     
 def parse_micro_data(species, exptype, orf_lookup): 
     #load raw data for a given species/experiment type pair.  Third argument is an orf lookup table
     #which is a from parse_raw_exp
+    #Note:  Need to change orf_lookup to platform_dict which is the new output (just a dictionary) from parse_raw_exp
     exptype_prefixes = {'Growth': '36253', 'Stress': '38478'}
     platform_prefixes = {'Kluyveromyces lactis': '10499', 'Saccharomyces cerevisiae': '9294', 'Candida glabrata':'10497', 'Naumovozyma castellii' : '10501', 'Saccharomyces bayanus' : '10505', 'Saccharomyces mikatae': '10502', 'Lachancea waltii': '10500', 'Saccharomyces paradoxus': '10496', 'Lacancea kluyverii': '10503', 'Debaryomyces hansenii': '15298', 'Vanderwaltozyma polyspora': '15297' }
     
@@ -249,7 +276,6 @@ def parse_micro_data(species, exptype, orf_lookup):
     
     return expdata_sorted
     
-
 def make_data_tables(species_list,fname_out_bases, base_dir):
     
     for jj,spec in enumerate(species_list):  
@@ -311,58 +337,7 @@ def combine_growth_stress_datasets(species):
     print('combined dataset saved as ' + fname_out )
 
     return growth_stress_data
-    
-def read_SGD_features():
-    
-    #Read in orf/name file and make it a dictionary
-    # Gabe 7/12/16
-    # SC_features_fname = os.path.normpath(data_processing_dir + "\ortholog_files\\SGD_features.tab")
-    SC_features_fname = os.path.normpath(data_processing_dir + "/ortholog_files/SGD_features.tab")
 
-    SC_features = pd.read_csv(SC_features_fname, sep = '\t', header=None)
-    SC_orfs = SC_features.groupby(1).get_group('ORF')
-    
-    #Makes a dictionary to look up orfs by gene names.  This won't include all orfs - those without names had NaN in column 4 so 
-    #are presumably left out. 
-    SC_orfs_lookup = dict(zip(SC_orfs[4], SC_orfs[3]))
-    SC_genename_lookup = dict(zip(SC_orfs[3], SC_orfs[4]))
-    SC_features_lookup = dict(zip(SC_orfs[3], SC_orfs[15]))
-       
-    return SC_orfs_lookup, SC_genename_lookup, SC_features_lookup
-
-def get_sgd_description(sc_genename_list):
-    SGD_features = read_SGD_features()
-    description_dict = SGD_features[2]
-
-    description_list = []
-    for gene in sc_genename_list:
-        try: 
-            description = description_dict[gene]
-        except KeyError: 
-            print('description lookup failed for ' + gene)
-            description = "Lookup Failed"
-        description_list.append(description)
-    
-    return description_list
-
-
-def read_orth_lookup_table(species1, species2, orth_dir):
-    #ensure orth_dir has a separator at the end of it.
-    #For a given species read in the ortholog file, make a dictionary
-    #formerly used the full name of the species, but 2/20/2018 switched to using four letter abbreviations. 
-    #orth_file_abbrev = {'Kluyveromyces lactis': 'Klac', 'Saccharomyces cerevisiae': 'Scer', 'Candida glabrata':'Cgla', 'Saccharomyces castellii' : 'Scas', 'Saccharomyces bayanus' : 'Sbay'}
-    orth_fname = species1 + "-" + species2 + "-orthologs.txt"
-    orth_fname = os.path.normpath(orth_dir + orth_fname)
-    
-    #There are some orfs that have multiple orthologs - in that case both will be used
-    with open(orth_fname) as f:
-        orth_lookup = {}
-        for line in f:
-            linesp = line.split()
-            orth_lookup[linesp[0]]= linesp[1:]
-
-    return orth_lookup  
-    
 def get_gasch_ESR_list(act_rep):
     #For a file from the Gasch 2000 supplement, read in the data
     fname = os.path.normpath(data_processing_dir + "/gasch_data/gasch_fig3_" + act_rep + "_ESR.txt")
@@ -643,89 +618,7 @@ def get_microarray_lookup(fname,nrows_skip=17):
     
     return microarray_lookup
 
-def write_YGOB_orth_lookup_table(species1, species2, base_dir, all_ortholog_file):
-    #for each position in species 1
-    #Assign orthologs or 'NONE' to each column from Position 2 and 3
-    fname = os.path.normpath(base_dir + all_ortholog_file)
-    orth_positions = {'Kluyveromyces lactis': [15], 'Saccharomyces cerevisiae' : [11,21]}
-    #YGOB_Pillars.txt order of species: 
-    #    0    V. polyspora Position 1
-    #    1    T. phaffii Position 1
-    #    2    T. blattae Position 1
-    #    3    N. dairenensis Position 1
-    #    4    N. castellii Position 1
-    #    5    K. naganishii Position 1
-    #    6    K. africana Position 1
-    #    7    C. glabrata Position 1
-    #    8    S. bayanus var. uvarum Position 1
-    #    9    S. kudriavzevii Position 1
-    #    10   S. mikatae Position 1
-    #    11   S. cerevisiae Position 1
-    #    12   Ancestral Gene Order
-    #    13   Z. rouxii
-    #    14   T. delbrueckii
-    #    15   K. lactis
-    #    16   E. gossypii 
-    #    17   E. cymbalariae
-    #    18   L. kluyveri
-    #    19   L. thermotolerans
-    #    20   L. waltii
-    #    21   S. cerevisiae Position 2
-    #    22   S. mikatae Position 2
-    #    23   S. kudriavzevii Position 2
-    #    24   S. bayanus var. uvarum Position 2
-    #    25   C. glabrata Position 2
-    #    26   K. africana Position 2
-    #    27   K. naganishii Position 2
-    #    28   N. castellii Position 2
-    #    29   N. dairenensis Position 2
-    #    30   T. blattae Position 2
-    #    31   T. phaffii Position 2
-    #    32   V. polyspora Position 2
-    
-    species1_columns = orth_positions[species1]
-    species2_columns = orth_positions[species2]
-    
-    with open(fname) as f:
-        orth_lookup = []
-        for line in f:
-            linesp = line.split()
-            for column1 in species1_columns: 
-                if linesp[column1]!= '---':
-                    species1_gene = [linesp[column1]]
-                    species2_genes = []
-                    for column2 in species2_columns: 
-                        if linesp[column2]!='---': 
-                            species2_genes.append(linesp[column2])
-                    if len(species2_genes) == 0:
-                        species2_genes.append('NONE')
-                    orth_lookup.append(species1_gene + species2_genes)
-                    
-    orth_file_abbrev = {'Kluyveromyces lactis': 'Klac', 'Saccharomyces cerevisiae': 'Scer', 'Candida glabrata':'Cgla', 'Saccharomyces castellii' : 'Scas', 'Saccharomyces bayanus' : 'Sbay'}
-    orth_lookup_outputfname = os.path.normpath(base_dir + '\expression_data\ortholog_files_YGOB\\' + orth_file_abbrev[species1] + "-" + orth_file_abbrev[species2] + "-orthologs.txt"  )
-    orth_lookup_outputfile = open(orth_lookup_outputfname, 'w')
-    
-    for gene in orth_lookup:
-        line = '\t'.join(gene)+'\n'
-        orth_lookup_outputfile.write(line)
-    orth_lookup_outputfile.close()
-    
-    return orth_lookup 
-
-def load_YGOB_annotations(species, base_dir, species_tab_file):
-    fname = os.path.normpath(base_dir + species_tab_file)
-    
-    with open(fname) as f:
-        annotation_lookup = {}
-        for line in f:
-            linesp = line.split('\t')
-            gene = linesp[0]
-            annotation = linesp[8]
-            annotation_lookup[gene] = annotation
-    
-    return annotation_lookup
-
-
+## Id conversions
 def SC_common_name_lookup(gene_list):
     #SC Common Name lookup
     #Input is a list of orfs, output is a list of common names
@@ -810,6 +703,111 @@ def SC_orf_lookup_by_name(name_list):
     
     return sc_genenames
 
+# def kl_genename_convert(df): 
+    # #probably don't really need this one - just list one below. 
+    # #Input is dataframe with GFF version of kl genename as the index. 
+    # #Ouput is dataframe with standard version of kl genename as the index. 
+
+    # kl_genename = kl_genename_convert_list(df.index)
+    # df['kl_genename'] = kl_genename
+    # df.set_index('kl_genename',inplace = True)
+
+    # return df
+
+def kl_genename_convert_list(kl_genes): 
+    kl_genename = []
+    for gene in kl_genes: 
+        if gene[0:5]=='KLLA0':
+            new_gene = gene.split('_')[0]+gene.split('_')[1]
+        else: 
+            new_gene = gene
+        kl_genename.append(new_gene)
+
+    return kl_genename
+    
+## Dealing with Orthologs
+def write_YGOB_orth_lookup_table(species1, species2, base_dir, all_ortholog_file):
+    #for each position in species 1
+    #Assign orthologs or 'NONE' to each column from Position 2 and 3
+    fname = os.path.normpath(base_dir + all_ortholog_file)
+    orth_positions = {'Kluyveromyces lactis': [15], 'Saccharomyces cerevisiae' : [11,21]}
+    #YGOB_Pillars.txt order of species: 
+    #    0    V. polyspora Position 1
+    #    1    T. phaffii Position 1
+    #    2    T. blattae Position 1
+    #    3    N. dairenensis Position 1
+    #    4    N. castellii Position 1
+    #    5    K. naganishii Position 1
+    #    6    K. africana Position 1
+    #    7    C. glabrata Position 1
+    #    8    S. bayanus var. uvarum Position 1
+    #    9    S. kudriavzevii Position 1
+    #    10   S. mikatae Position 1
+    #    11   S. cerevisiae Position 1
+    #    12   Ancestral Gene Order
+    #    13   Z. rouxii
+    #    14   T. delbrueckii
+    #    15   K. lactis
+    #    16   E. gossypii 
+    #    17   E. cymbalariae
+    #    18   L. kluyveri
+    #    19   L. thermotolerans
+    #    20   L. waltii
+    #    21   S. cerevisiae Position 2
+    #    22   S. mikatae Position 2
+    #    23   S. kudriavzevii Position 2
+    #    24   S. bayanus var. uvarum Position 2
+    #    25   C. glabrata Position 2
+    #    26   K. africana Position 2
+    #    27   K. naganishii Position 2
+    #    28   N. castellii Position 2
+    #    29   N. dairenensis Position 2
+    #    30   T. blattae Position 2
+    #    31   T. phaffii Position 2
+    #    32   V. polyspora Position 2
+    
+    species1_columns = orth_positions[species1]
+    species2_columns = orth_positions[species2]
+    
+    with open(fname) as f:
+        orth_lookup = []
+        for line in f:
+            linesp = line.split()
+            for column1 in species1_columns: 
+                if linesp[column1]!= '---':
+                    species1_gene = [linesp[column1]]
+                    species2_genes = []
+                    for column2 in species2_columns: 
+                        if linesp[column2]!='---': 
+                            species2_genes.append(linesp[column2])
+                    if len(species2_genes) == 0:
+                        species2_genes.append('NONE')
+                    orth_lookup.append(species1_gene + species2_genes)
+                    
+    orth_file_abbrev = {'Kluyveromyces lactis': 'Klac', 'Saccharomyces cerevisiae': 'Scer', 'Candida glabrata':'Cgla', 'Saccharomyces castellii' : 'Scas', 'Saccharomyces bayanus' : 'Sbay'}
+    orth_lookup_outputfname = os.path.normpath(base_dir + '\expression_data\ortholog_files_YGOB\\' + orth_file_abbrev[species1] + "-" + orth_file_abbrev[species2] + "-orthologs.txt"  )
+    orth_lookup_outputfile = open(orth_lookup_outputfname, 'w')
+    
+    for gene in orth_lookup:
+        line = '\t'.join(gene)+'\n'
+        orth_lookup_outputfile.write(line)
+    orth_lookup_outputfile.close()
+    
+    return orth_lookup 
+
+def load_YGOB_annotations(species, base_dir, species_tab_file):
+    fname = os.path.normpath(base_dir + species_tab_file)
+    
+    with open(fname) as f:
+        annotation_lookup = {}
+        for line in f:
+            linesp = line.split('\t')
+            gene = linesp[0]
+            annotation = linesp[8]
+            annotation_lookup[gene] = annotation
+    
+    return annotation_lookup
+
 def get_species_from_gene(gene, species_info):
     #extracts species for a given gene name: 
     #loop through species that have a prefix
@@ -840,6 +838,323 @@ def get_species_from_gene(gene, species_info):
     
     return gene_spec
 
+def read_orth_lookup_table(species1, species2, orth_dir):
+    #ensure orth_dir has a separator at the end of it.
+    #For a given species read in the ortholog file, make a dictionary
+    #formerly used the full name of the species, but 2/20/2018 switched to using four letter abbreviations. 
+    #orth_file_abbrev = {'Kluyveromyces lactis': 'Klac', 'Saccharomyces cerevisiae': 'Scer', 'Candida glabrata':'Cgla', 'Saccharomyces castellii' : 'Scas', 'Saccharomyces bayanus' : 'Sbay'}
+    orth_fname = species1 + "-" + species2 + "-orthologs.txt"
+    orth_fname = os.path.normpath(orth_dir + orth_fname)
+    
+    #There are some orfs that have multiple orthologs - in that case both will be used
+    with open(orth_fname) as f:
+        orth_lookup = {}
+        for line in f:
+            linesp = line.split()
+            orth_lookup[linesp[0]]= linesp[1:]
+
+    return orth_lookup  
+   
+def get_other_paralogs_from_dataframe(genes, dataframe): 
+    #using an input list of genes that have paralogs, and a dataframe that contains its paralogs, outputs a dataframe that
+    #has just the other paralogs that are not listed. 
+    #the genes must be listed as the SC_common_name, and the dataframe must have sc_genename and kl_genename fields. 
+    N_genes_in = len(genes)
+    dataframe_genes = dataframe[dataframe['SC_common_name'].isin(genes)]
+    sc_genenames = dataframe_genes['sc_genename']
+    kl_genenames = dataframe_genes['kl_genename']
+    dataframe_all = dataframe[dataframe['kl_genename'].isin(kl_genenames)]
+    sc_genenames_all = dataframe_all['sc_genename']
+    sc_genenames_paralogs = list(set(sc_genenames_all)-set(sc_genenames))
+    N_genes_out = len(sc_genenames_paralogs)
+    if N_genes_in != N_genes_out: 
+        print("number of genes in not equal to number of genes out - maybe one of the input genes doesn't have a paralog, or it is not contained in the dataframe") 
+    dataframe_paralogs = dataframe_all[dataframe_all['sc_genename'].isin(sc_genenames_paralogs)]
+    
+    return(dataframe_paralogs)
+    
+    
+    return 
+
+def join_ohnologs_and_sort(data_to_add, ohnologs, sort_column):
+    #For a dataset with an index of sc_genename and a column to sort on (e.g. 'log2FoldChange') provides a dataframe
+    #in which each row contains both ohnologs 
+
+    ohnologs_expression_gene1 = pd.merge(ohnologs, data_to_add, how = 'inner', left_on = 'Gene 1', right_index = True)
+    ohnologs_expression = pd.merge(ohnologs_expression_gene1, data_to_add, how = 'inner', left_on = 'Gene 2', right_index = True, suffixes = ['_gene1', '_gene2'])
+
+    ## This seems important if you are not merging on the index
+    ## Drop Gene 1 and Gene 2 columns
+    #ohnologs_expression.drop(['Gene 1', 'Gene 2'], axis = 1, inplace = True)
+
+    # Rename Gene Name 1 and Gene Name 2 columns
+    ohnologs_expression.rename(columns = {'Gene 1' : 'sc_genename_gene1',
+                                          'Gene 2' : 'sc_genename_gene2',
+                                          'Gene Name 1':'SC_common_name_gene1',
+                                          'Gene Name 2':'SC_common_name_gene2'}, inplace = True)
+
+    new_columns = {}
+    for level in ['low','high']:
+        new_columns['sc_genename_' + level] = []
+        new_columns['SC_common_name_' + level] = []
+        for column_name in data_to_add.columns:
+            new_columns[column_name + '_' + level] = []
+
+    for index, row in ohnologs_expression.iterrows():
+        #Decide if gene1 or gene2 is low expression
+        if row[sort_column + '_gene1']<row[sort_column + '_gene2']:
+            low_gene = 'gene1'
+            high_gene = 'gene2'
+        elif  row[sort_column + '_gene1']>row[sort_column + '_gene2']:
+            low_gene = 'gene2'
+            high_gene = 'gene1'
+        else:
+            print('problems with {} and {}'.format(row['SC_common_name_gene1'],row['SC_common_name_gene2']))
+        
+        level_dict = {'low':low_gene, 'high': high_gene}
+                   
+        for level, level_gene in level_dict.items():
+            new_columns['sc_genename_' + level].append(row['sc_genename_'+level_gene])
+            new_columns['SC_common_name_' + level].append(row['SC_common_name_'+level_gene])
+            for column_name in data_to_add.columns:
+                new_columns[column_name + '_' + level].append(row[column_name + '_' + level_gene])
+
+    ohnologs_expression_sorted = ohnologs_expression.copy()
+
+    for level in ['low','high']:
+        ohnologs_expression_sorted['sc_genename_' + level] = new_columns['sc_genename_' + level]
+        ohnologs_expression_sorted['SC_common_name_' + level] = new_columns['SC_common_name_' + level] 
+        for column_name in data_to_add.columns:
+            ohnologs_expression_sorted[column_name + '_' + level] = new_columns[column_name + '_' + level] 
+
+    columns_to_drop = []
+
+    for gene in ['gene1','gene2']:
+        columns_to_drop.append('sc_genename_' + gene)
+        columns_to_drop.append('SC_common_name_' + gene)
+        for column_name in data_to_add.columns:
+            columns_to_drop.append(column_name + '_' + gene)
+
+    ohnologs_expression_sorted.drop(columns=columns_to_drop, inplace=True)
+    return ohnologs_expression_sorted
+
+## Grouping genes
+def threshold_sign(x, high_threshold, low_threshold): 
+    if x > high_threshold:
+        x_sign = 1
+    elif x< low_threshold:
+        x_sign = -1
+    else: 
+        x_sign = 0
+        
+    return x_sign
+
+def threshold_group_SC(a,b,high_threshold, low_threshold):
+    #input: a, b, high_threshold, low_threshold
+    #output: group - either {'up_up', 'up_flat','up_down','flat_flat', 'down_flat','down_down'}
+
+    a_sign = threshold_sign(a, high_threshold, low_threshold)
+    b_sign = threshold_sign(b, high_threshold, low_threshold)
+
+    sign_sum = a_sign+b_sign
+
+    if sign_sum ==2:
+        group = 'up_up'
+    elif sign_sum == -2: 
+        group = 'down_down'
+    elif sign_sum == 1: 
+        group = 'up_flat'
+    elif sign_sum == -1: 
+        group = 'down_flat'
+    elif sign_sum == 0:
+        if a_sign-b_sign == 0:
+            group = 'flat_flat'
+        else: 
+            group = 'up_down'
+    else: 
+        print('Error - did not assign group')
+
+    return group
+
+def threshold_group_SC_series(A,B, high_threshold, low_threshold ):
+    
+    AB = pd.concat([A,B], axis = 1)
+
+    group = []
+    for ind,row in AB.iterrows():
+        group.append(threshold_group_SC(row[0],row[1],high_threshold, low_threshold))
+
+    group = pd.Series(group, index = AB.index)
+
+    return group
+
+def threshold_group(a,high_threshold, low_threshold):
+    #change to this more general name from threshold_group_KL
+    #input: a, b, high_threshold, low_threshold
+    #output: group - either up, flat, or down
+
+    a_sign = threshold_sign(a, high_threshold, low_threshold)
+
+    if a_sign ==1:
+        group = 'up'
+    elif a_sign == 0: 
+        group = 'flat'
+    elif a_sign == -1: 
+        group = 'down'
+    else: 
+        print('Error - did not assign group')
+
+    return group
+
+def threshold_group_series(A, high_threshold, low_threshold ):
+    
+    group = []
+    for ind,item in A.iteritems():
+        group.append(threshold_group(item,high_threshold, low_threshold))
+
+    group = pd.Series(group, index = A.index)
+
+    return group
+
+def get_gis1_rph1_sets(act_threshold, inh_threshold, kl_sc_PKA_data_subset, condition = 'log'): 
+    #Use cutoff to assign activated, inhibited, and repressed for gis1, rph1 and gis1rph1 for each condition in the westholm dataset
+    #input is
+    #   threshold levels 
+    #   kl_sc_PKA_data_subset - must have the columns for the data: ['log_g-wt','log_r-wt', 'log_gr-wt']
+    # condition can be 'log', 'PDS' or '3d' for 3days stationary phase
+    
+    rg_columns = [condition + '_g-wt',condition + '_r-wt', condition + '_gr-wt']
+    for column in rg_columns: 
+        kl_sc_PKA_data_subset[column+'_label'] = threshold_group_series(kl_sc_PKA_data_subset[column], act_threshold, inh_threshold )
+
+    strains = ['g','r','gr']
+    gr_sets = {}
+    exp_profiles = tuple(product(['up','flat','down'],['up','flat','down'],['up','flat','down']))
+    for g_label, r_label, gr_label in exp_profiles:
+        gr_sets['g-'+g_label + '_r-'+r_label + '_gr-'+gr_label] = list(kl_sc_PKA_data_subset[(kl_sc_PKA_data_subset[condition + '_g-wt_label']==g_label) &
+                                                                      (kl_sc_PKA_data_subset[condition + '_r-wt_label']==r_label) &
+                                                                      (kl_sc_PKA_data_subset[condition + '_gr-wt_label']==gr_label)]['sc_genename'])
+
+
+    return kl_sc_PKA_data_subset, gr_sets
+
+## Go analysis
+def load_goslim_data(GO_aspect, go_slim_fname = 'go_slim_mapping_20181204.tab'):
+    #The three GO_aspect values are: 
+    #C = cellular_component
+    #F = molecular_function
+    #P = biological_process
+    go_slims = pd.read_table(data_processing_dir + os.path.normpath('/go_terms/' + go_slim_fname),header = None)
+    go_slims.columns = ['sc_genename','SC_common_name','sgd_ID','GO_aspect','GO_term','GO_term_ID','feature_type']
+    
+    go_slims_aspect = go_slims[go_slims['GO_aspect']==GO_aspect]
+    go_term_list = list(set(go_slims_aspect['GO_term']))
+    
+    return go_slims_aspect, go_term_list
+
+def go_terms_for_genelist(gene_set_list, go_slims_aspect, go_term_list): 
+    #for a given gene list provides a dataframe listing genes in that list for each go term. 
+    go_term_data = []
+
+    go_term_index = []
+
+    for term in go_term_list: 
+        term_genes = list(go_slims_aspect[go_slims_aspect['GO_term']==term]['sc_genename'])
+        if len(term_genes)> len(set(term_genes)):
+            print("Duplicate Term: " + term)
+        subset_genes_in_goterm =  set(gene_set_list) & set(term_genes)
+        N_subset_genes_in_goterm = len(subset_genes_in_goterm)
+        N_genes_in_goterm = len(term_genes)
+        if N_subset_genes_in_goterm >0:
+            subset_genes_in_goterm_commonname = SC_common_name_lookup(subset_genes_in_goterm)
+            go_term_data.append((N_subset_genes_in_goterm,
+                                subset_genes_in_goterm,
+                                subset_genes_in_goterm_commonname,
+                                N_genes_in_goterm))
+            go_term_index.append(term)
+
+    go_term_df = pd.DataFrame(go_term_data, index = go_term_index,columns = ['N subset genes in goterm',
+                                                                            'genes',
+                                                                            'genes common name',
+                                                                            'N genes in goterm'])
+                                                                            
+    return go_term_df
+
+def go_term_enrichment(gene_set_list, background_genes, go_term_list, go_slims_aspect): 
+    #input is gene_set_list, background_genes list, go_term_list, and go_slims_aspect dataframe with data for each go term.  
+    #output is a dataframe with enrichment columns and full list of enriched genes. 
+       
+    missing_genes = ['Scer_YGOB_YDR134C', 'Scer_RDN18-1', 
+                     'Scer_YGOB_SDC25', 'Scer_RDN25-1', 
+                     'Scer_RDN58-1', 'Scer_YGOB_Anc_7.495', 
+                     'Scer_YGOB_ADL119W', 'Scer_RDN5-1']
+    
+    
+    bg_filtered_genes = set(background_genes) & set(missing_genes)
+    if len(bg_filtered_genes)>0:
+        print("The following missing genes are filtered out of the background set:")
+        print(bg_filtered_genes)
+    background_genes_filtered = list(set(background_genes)-set(missing_genes))
+    
+    
+    #filter out missing genes 
+    gene_set_filtered_genes = set(gene_set_list) & set(missing_genes)
+    if len(gene_set_filtered_genes)>0:
+        print("The following missing genes are filtered out of the input set:")
+        print(gene_set_filtered_genes)
+        gene_set_list = list(set(gene_set_list)-set(missing_genes))
+    go_term_data = []
+    go_term_list_filtered = go_term_list.copy()
+    for term in go_term_list: 
+        term_genes = list(go_slims_aspect[go_slims_aspect['GO_term']==term]['sc_genename'])
+        if len(term_genes)> len(set(term_genes)):
+            print("Duplicate Term for term " + term)
+        subset_genes_in_goterm =   list(set(gene_set_list) & set(term_genes))
+        N_subset_genes_in_goterm = len(subset_genes_in_goterm)
+        N_subset_genes_notin_goterm = len(gene_set_list)-N_subset_genes_in_goterm
+        N_bg_genes_in_goterm = len(set(background_genes_filtered) & set(term_genes))
+        if N_bg_genes_in_goterm >0:
+            N_bg_genes_notin_goterm = len(background_genes_filtered)-N_bg_genes_in_goterm
+            oddsratio, pvalue = stats.fisher_exact([[N_subset_genes_in_goterm, N_bg_genes_in_goterm], [N_subset_genes_notin_goterm, N_bg_genes_notin_goterm]],alternative = 'greater')
+            subset_genes_in_goterm_commonname = SC_common_name_lookup(subset_genes_in_goterm)
+            go_term_data.append((N_subset_genes_in_goterm,
+                                 len(gene_set_list),
+                                 float(N_subset_genes_in_goterm)/float(len(gene_set_list)),
+                                 float(N_bg_genes_in_goterm)/float(len(background_genes_filtered)),
+                                 float(N_subset_genes_in_goterm)/float(N_bg_genes_in_goterm),
+                                 pvalue,
+                                 subset_genes_in_goterm,
+                                 subset_genes_in_goterm_commonname,
+                                 oddsratio))
+        else:
+            print(term + " term removed: no background genes")
+            go_term_list_filtered.remove(term) 
+    
+    go_term_enrichment = pd.DataFrame(go_term_data, index = go_term_list_filtered,columns = ['N subset genes in goterm',
+                                                                            'N genes in subset',
+                                                                            'pct goterm in subset',
+                                                                            'pct go term in background',
+                                                                            'pct of go terms genes in subset',
+                                                                            'pvalue',
+                                                                            'genes',
+                                                                            'genes common name',
+                                                                            'oddsratio'])
+    
+    go_term_enrichment.sort_values(by = 'pvalue', inplace = True)
+    
+    return go_term_enrichment
+
+def go_terms_by_gene(sc_genename_list): 
+    GO_aspect = 'P'
+    go_slims_aspect, go_term_list = load_goslim_data(GO_aspect)
+
+    go_term_list = []
+    for gene in sc_genename_list:
+        go_term_list.append(", ".join(list(go_slims_aspect[go_slims_aspect['sc_genename'] == gene].loc[:,'GO_term'])))
+
+    return go_term_list
+
+## Promoter analysis
 def extract_promoter_sequence(gene, prom_length):
     #extracts promoter sequence from NCBI for a given gene. 
     
@@ -1078,236 +1393,6 @@ def run_ame_analysis(spec, target_gene_list, control_gene_list,target_fname_pref
     
     return
 
-
-def merge_overlap_column(series_a, series_b):
-    #for two string columns in an outer merge that should have identical entries except where 
-    #there are np.nan values, outputs a list that has just one value and replaces np.nan with 
-    #value that is present in either series a or series b. 
-    #set consensus of x equal to None when not present instead of np.nan
-
-    series_a = series_a.where(series_a.notnull(), other=None)
-    series_b = series_b.where(series_b.notnull(), other=None)
-
-    out_list = []
-    for a,b in zip(series_a,series_b):
-        if a==b: #np.isnan(b):
-            out = a
-        elif a:
-            out = a
-        elif b: 
-            out = b
-        else: 
-            print("a doesn't match b a: " + a + " b: " + b)
-        out_list.append(out)
-
-    return out_list
-    
-def make_foldchange_subsets(kl_sc_PKA_data, pthreshold_KL, pthreshold_SC): 
-    ##would be nice to have option to make thresholds on either padj or log2FoldChange
-    #Highlight hits that are statistically significant for K.Lactis and S. Cerevisiae and breaks them down into activated and 
-    #repressed for each group. 
-    #output is a dictionary which links a gene subset name to a list of genes using the S.Cer orf name. 
-    
-    kl_sc_PKA_data_klsig = kl_sc_PKA_data[kl_sc_PKA_data['padj_KL'] < pthreshold_KL]
-    kl_sc_PKA_data_scsig = kl_sc_PKA_data[kl_sc_PKA_data['padj_SC'] < pthreshold_SC]
-    
-    klscsig_ind = set(kl_sc_PKA_data_klsig.index)&set(kl_sc_PKA_data_scsig.index)
-    klsig_scunsig_ind = set(kl_sc_PKA_data_klsig.index)-klscsig_ind
-    scsig_klunsig_ind = set(kl_sc_PKA_data_scsig.index)-klscsig_ind
-    unsig_ind = set(kl_sc_PKA_data.index)-(set(kl_sc_PKA_data_klsig.index)|set(kl_sc_PKA_data_scsig.index))
-    
-    print("At an adjusted pvalue threshold of {:.2E} for K.Lac and {:.2E} for S.Cer, there are"
-           " {:d} genes significant for both species, {:d} genes significant for KL only,"
-           " {:d} genes significant for SC only, and {:d} unsignificant genes".format(
-                pthreshold_KL,
-                pthreshold_SC,
-                len(klscsig_ind), 
-                len(klsig_scunsig_ind),
-                len(scsig_klunsig_ind),
-                len(unsig_ind)))
-    
-    kl_sc_PKA_data_klsig_scunsig = kl_sc_PKA_data.loc[list(klsig_scunsig_ind)]
-    kl_sc_PKA_data_scsig_klunsig = kl_sc_PKA_data.loc[list(scsig_klunsig_ind)]
-    kl_sc_PKA_data_klscsig = kl_sc_PKA_data.loc[list(klscsig_ind)]
-    kl_sc_PKA_data_unsig = kl_sc_PKA_data.loc[list(unsig_ind)]
-    
-    #Significant for both, but up in SC and down in kl. 
-    upsc_downkl = list(kl_sc_PKA_data_klscsig[(kl_sc_PKA_data_klscsig['log2FoldChange_SC']>0)&(kl_sc_PKA_data_klscsig['log2FoldChange_KL']<0)]['sc_genename'])
-    print("Genes that are up in S.Cer and Down in K.Lac")
-    print(upsc_downkl)
-    #HEF3 {'YNL014W'}
-    
-    upkl_downsc = list(kl_sc_PKA_data_klscsig[(kl_sc_PKA_data_klscsig['log2FoldChange_SC']<0)&(kl_sc_PKA_data_klscsig['log2FoldChange_KL']>0)]['sc_genename'])
-    print("Genes that are up in K.Lac and Down in S.Cer")
-    print(upkl_downsc)
-    
-    #Add in the one gene that is significant for both but repressed in SC and activated in KL. 
-    klsig_act_genes = list(kl_sc_PKA_data_klsig_scunsig[kl_sc_PKA_data_klsig_scunsig['log2FoldChange_KL']>0]['sc_genename'])
-    for gene in upkl_downsc: 
-        klsig_act_genes.append(gene)
-    
-    #Add in the one gene that is significant for both but activated in SC and repressed in KL.
-    klsig_rep_genes = list(kl_sc_PKA_data_klsig_scunsig[kl_sc_PKA_data_klsig_scunsig['log2FoldChange_KL']<0]['sc_genename'])
-    for gene in upsc_downkl: 
-        klsig_rep_genes.append(gene)
-    
-    #Add in the one gene that is significant for both but activated in SC and repressed in KL.
-    scsig_act_genes = list(kl_sc_PKA_data_scsig_klunsig[kl_sc_PKA_data_scsig_klunsig['log2FoldChange_SC']>0]['sc_genename'])
-    for gene in upsc_downkl: 
-        scsig_act_genes.append(gene)
-    
-    #Add in the one gene that is significant for both but repressed in SC and activated in KL. 
-    scsig_rep_genes = list(kl_sc_PKA_data_scsig_klunsig[kl_sc_PKA_data_scsig_klunsig['log2FoldChange_SC']<0]['sc_genename'])
-    for gene in upkl_downsc: 
-        scsig_rep_genes.append(gene)
-    
-    gene_set_dict = {'klsig_act': klsig_act_genes,
-                    'klsig_rep': klsig_rep_genes,
-                    'scsig_act': scsig_act_genes,
-                    'scsig_rep': scsig_rep_genes,
-                    'klscsig_act': list(kl_sc_PKA_data_klscsig[(kl_sc_PKA_data_klscsig['log2FoldChange_SC']>0) & (kl_sc_PKA_data_klscsig['log2FoldChange_KL']>0)]['sc_genename']),
-                    'klscsig_rep': list(kl_sc_PKA_data_klscsig[(kl_sc_PKA_data_klscsig['log2FoldChange_SC']<0) & (kl_sc_PKA_data_klscsig['log2FoldChange_KL']<0)]['sc_genename']),
-                    'klscunsig': list(kl_sc_PKA_data_unsig['sc_genename'])
-                    }
-    return gene_set_dict
-
-# def kl_genename_convert(df): 
-    # #probably don't really need this one - just list one below. 
-    # #Input is dataframe with GFF version of kl genename as the index. 
-    # #Ouput is dataframe with standard version of kl genename as the index. 
-
-    # kl_genename = kl_genename_convert_list(df.index)
-    # df['kl_genename'] = kl_genename
-    # df.set_index('kl_genename',inplace = True)
-
-    # return df
-
-def kl_genename_convert_list(kl_genes): 
-    kl_genename = []
-    for gene in kl_genes: 
-        if gene[0:5]=='KLLA0':
-            new_gene = gene.split('_')[0]+gene.split('_')[1]
-        else: 
-            new_gene = gene
-        kl_genename.append(new_gene)
-
-    return kl_genename
-    
-def load_goslim_data(GO_aspect):
-    #The three GO_aspect values are: 
-    #C = cellular_component
-    #F = molecular_function
-    #P = biological_process
-    go_slims = pd.read_table(data_processing_dir + os.path.normpath('/go_terms/go_slim_mapping.tab'),header = None)
-    go_slims.columns = ['sc_genename','sc_common_name','sgd_ID','GO_aspect','GO_term','GO_term_ID','feature_type']
-    
-    go_slims_aspect = go_slims[go_slims['GO_aspect']==GO_aspect]
-    go_term_list = list(set(go_slims_aspect['GO_term']))
-    
-    return go_slims_aspect, go_term_list
-
-def go_terms_for_genelist(gene_set_list, go_slims_aspect, go_term_list): 
-    #for a given gene list provides a dataframe listing genes in that list for each go term. 
-    go_term_data = []
-
-    go_term_index = []
-
-    for term in go_term_list: 
-        term_genes = list(go_slims_aspect[go_slims_aspect['GO_term']==term]['sc_genename'])
-        if len(term_genes)> len(set(term_genes)):
-            print("Duplicate Term: " + term)
-        subset_genes_in_goterm =  set(gene_set_list) & set(term_genes)
-        N_subset_genes_in_goterm = len(subset_genes_in_goterm)
-        N_genes_in_goterm = len(term_genes)
-        if N_subset_genes_in_goterm >0:
-            subset_genes_in_goterm_commonname = SC_common_name_lookup(subset_genes_in_goterm)
-            go_term_data.append((N_subset_genes_in_goterm,
-                                subset_genes_in_goterm,
-                                subset_genes_in_goterm_commonname,
-                                N_genes_in_goterm))
-            go_term_index.append(term)
-
-    go_term_df = pd.DataFrame(go_term_data, index = go_term_index,columns = ['N subset genes in goterm',
-                                                                            'genes',
-                                                                            'genes common name',
-                                                                            'N genes in goterm'])
-                                                                            
-    return go_term_df
-
-def go_term_enrichment(gene_set_list, background_genes, go_term_list, go_slims_aspect): 
-    #input is gene_set_list, background_genes list, go_term_list, and go_slims_aspect dataframe with data for each go term.  
-    #output is a dataframe with enrichment columns and full list of enriched genes. 
-       
-    missing_genes = ['Scer_YGOB_YDR134C', 'Scer_RDN18-1', 
-                     'Scer_YGOB_SDC25', 'Scer_RDN25-1', 
-                     'Scer_RDN58-1', 'Scer_YGOB_Anc_7.495', 
-                     'Scer_YGOB_ADL119W', 'Scer_RDN5-1']
-    
-    
-    bg_filtered_genes = set(background_genes) & set(missing_genes)
-    if len(bg_filtered_genes)>0:
-        print("The following missing genes are filtered out of the background set:")
-        print(bg_filtered_genes)
-    background_genes_filtered = list(set(background_genes)-set(missing_genes))
-    
-    
-    #filter out missing genes 
-    gene_set_filtered_genes = set(gene_set_list) & set(missing_genes)
-    if len(gene_set_filtered_genes)>0:
-        print("The following missing genes are filtered out of the input set:")
-        print(gene_set_filtered_genes)
-        gene_set_list = list(set(gene_set_list)-set(missing_genes))
-    go_term_data = []
-    go_term_list_filtered = go_term_list.copy()
-    for term in go_term_list: 
-        term_genes = list(go_slims_aspect[go_slims_aspect['GO_term']==term]['sc_genename'])
-        if len(term_genes)> len(set(term_genes)):
-            print("Duplicate Term for term " + term)
-        subset_genes_in_goterm =  set(gene_set_list) & set(term_genes)
-        N_subset_genes_in_goterm = len(subset_genes_in_goterm)
-        N_subset_genes_notin_goterm = len(gene_set_list)-N_subset_genes_in_goterm
-        N_bg_genes_in_goterm = len(set(background_genes_filtered) & set(term_genes))
-        if N_bg_genes_in_goterm >0:
-            N_bg_genes_notin_goterm = len(background_genes_filtered)-N_bg_genes_in_goterm
-            oddsratio, pvalue = stats.fisher_exact([[N_subset_genes_in_goterm, N_bg_genes_in_goterm], [N_subset_genes_notin_goterm, N_bg_genes_notin_goterm]],alternative = 'greater')
-            subset_genes_in_goterm_commonname = SC_common_name_lookup(subset_genes_in_goterm)
-            go_term_data.append((N_subset_genes_in_goterm,
-                                 len(gene_set_list),
-                                 float(N_subset_genes_in_goterm)/float(len(gene_set_list)),
-                                 float(N_bg_genes_in_goterm)/float(len(background_genes_filtered)),
-                                 float(N_subset_genes_in_goterm)/float(N_bg_genes_in_goterm),
-                                 pvalue,
-                                 subset_genes_in_goterm,
-                                 subset_genes_in_goterm_commonname,
-                                 oddsratio))
-        else:
-            print(term + " term removed: no background genes")
-            go_term_list_filtered.remove(term) 
-    
-    go_term_enrichment = pd.DataFrame(go_term_data, index = go_term_list_filtered,columns = ['N subset genes in goterm',
-                                                                            'N genes in subset',
-                                                                            'pct goterm in subset',
-                                                                            'pct go term in background',
-                                                                            'pct of go terms genes in subset',
-                                                                            'pvalue',
-                                                                            'genes',
-                                                                            'genes common name',
-                                                                            'oddsratio'])
-    
-    go_term_enrichment.sort_values(by = 'pvalue', inplace = True)
-    
-    return go_term_enrichment
-
-def go_terms_by_gene(sc_genename_list): 
-    GO_aspect = 'P'
-    go_slims_aspect, go_term_list = load_goslim_data(GO_aspect)
-
-    go_term_list = []
-    for gene in sc_genename_list:
-        go_term_list.append(", ".join(list(go_slims_aspect[go_slims_aspect['sc_genename'] == gene].loc[:,'GO_term'])))
-
-    return go_term_list
-
 def make_meme_promoter_files(gene_list, fname_prefix, spec_comparision_data): 
 
     #Read in the KL promoter database.  
@@ -1345,7 +1430,6 @@ def make_meme_promoter_files(gene_list, fname_prefix, spec_comparision_data):
             f.write(seq_line)
     
     return promoter_fname_kl, promoter_fname_sc
-
 
 def run_fimo_command(promoter_fname, thresh, fname_prefix, output_dir, 
                      motif_fname = data_processing_dir + os.path.normpath('motifs/JASPAR_CORE_2016_fungi.meme'), 
@@ -1477,7 +1561,6 @@ def exact_promoter_scan_genelist(gene_list, motif_dict, promoter_database, outpu
     
     return output_data_frame
 
-
 def exact_promoter_scan(motif, prom_seq, output_format='count', sequence_context=0):
     #this function is for a single sequence - same name used to be for one that searched a list of genes 
     # now called exact_promoter_scan_genelist
@@ -1528,85 +1611,99 @@ def exact_promoter_scan(motif, prom_seq, output_format='count', sequence_context
         
     return output
 
+def merge_overlap_column(series_a, series_b):
+    #for two string columns in an outer merge that should have identical entries except where 
+    #there are np.nan values, outputs a list that has just one value and replaces np.nan with 
+    #value that is present in either series a or series b. 
+    #set consensus of x equal to None when not present instead of np.nan
 
+    series_a = series_a.where(series_a.notnull(), other=None)
+    series_b = series_b.where(series_b.notnull(), other=None)
 
-def threshold_sign(x, high_threshold, low_threshold): 
-    if x > high_threshold:
-        x_sign = 1
-    elif x< low_threshold:
-        x_sign = -1
-    else: 
-        x_sign = 0
-        
-    return x_sign
-
-def threshold_group_SC(a,b,high_threshold, low_threshold):
-    #input: a, b, high_threshold, low_threshold
-    #output: group - either {'up_up', 'up_flat','up_down','flat_flat', 'down_flat','down_down'}
-
-    a_sign = threshold_sign(a, high_threshold, low_threshold)
-    b_sign = threshold_sign(b, high_threshold, low_threshold)
-
-    sign_sum = a_sign+b_sign
-
-    if sign_sum ==2:
-        group = 'up_up'
-    elif sign_sum == -2: 
-        group = 'down_down'
-    elif sign_sum == 1: 
-        group = 'up_flat'
-    elif sign_sum == -1: 
-        group = 'down_flat'
-    elif sign_sum == 0:
-        if a_sign-b_sign == 0:
-            group = 'flat_flat'
+    out_list = []
+    for a,b in zip(series_a,series_b):
+        if a==b: #np.isnan(b):
+            out = a
+        elif a:
+            out = a
+        elif b: 
+            out = b
         else: 
-            group = 'up_down'
-    else: 
-        print('Error - did not assign group')
+            print("a doesn't match b a: " + a + " b: " + b)
+        out_list.append(out)
 
-    return group
-
-def threshold_group_SC_series(A,B, high_threshold, low_threshold ):
+    return out_list
     
-    AB = pd.concat([A,B], axis = 1)
-
-    group = []
-    for ind,row in AB.iterrows():
-        group.append(threshold_group_SC(row[0],row[1],high_threshold, low_threshold))
-
-    group = pd.Series(group, index = AB.index)
-
-    return group
-
-def threshold_group(a,high_threshold, low_threshold):
-    #change to this more general name from threshold_group_KL
-    #input: a, b, high_threshold, low_threshold
-    #output: group - either up, flat, or down
-
-    a_sign = threshold_sign(a, high_threshold, low_threshold)
-
-    if a_sign ==1:
-        group = 'up'
-    elif a_sign == 0: 
-        group = 'flat'
-    elif a_sign == -1: 
-        group = 'down'
-    else: 
-        print('Error - did not assign group')
-
-    return group
-
-def threshold_group_series(A, high_threshold, low_threshold ):
+def make_foldchange_subsets(kl_sc_PKA_data, pthreshold_KL, pthreshold_SC): 
+    ##would be nice to have option to make thresholds on either padj or log2FoldChange
+    #Highlight hits that are statistically significant for K.Lactis and S. Cerevisiae and breaks them down into activated and 
+    #repressed for each group. 
+    #output is a dictionary which links a gene subset name to a list of genes using the S.Cer orf name. 
     
-    group = []
-    for ind,item in A.iteritems():
-        group.append(threshold_group(item,high_threshold, low_threshold))
+    kl_sc_PKA_data_klsig = kl_sc_PKA_data[kl_sc_PKA_data['padj_KL'] < pthreshold_KL]
+    kl_sc_PKA_data_scsig = kl_sc_PKA_data[kl_sc_PKA_data['padj_SC'] < pthreshold_SC]
+    
+    klscsig_ind = set(kl_sc_PKA_data_klsig.index)&set(kl_sc_PKA_data_scsig.index)
+    klsig_scunsig_ind = set(kl_sc_PKA_data_klsig.index)-klscsig_ind
+    scsig_klunsig_ind = set(kl_sc_PKA_data_scsig.index)-klscsig_ind
+    unsig_ind = set(kl_sc_PKA_data.index)-(set(kl_sc_PKA_data_klsig.index)|set(kl_sc_PKA_data_scsig.index))
+    
+    print("At an adjusted pvalue threshold of {:.2E} for K.Lac and {:.2E} for S.Cer, there are"
+           " {:d} genes significant for both species, {:d} genes significant for KL only,"
+           " {:d} genes significant for SC only, and {:d} unsignificant genes".format(
+                pthreshold_KL,
+                pthreshold_SC,
+                len(klscsig_ind), 
+                len(klsig_scunsig_ind),
+                len(scsig_klunsig_ind),
+                len(unsig_ind)))
+    
+    kl_sc_PKA_data_klsig_scunsig = kl_sc_PKA_data.loc[list(klsig_scunsig_ind)]
+    kl_sc_PKA_data_scsig_klunsig = kl_sc_PKA_data.loc[list(scsig_klunsig_ind)]
+    kl_sc_PKA_data_klscsig = kl_sc_PKA_data.loc[list(klscsig_ind)]
+    kl_sc_PKA_data_unsig = kl_sc_PKA_data.loc[list(unsig_ind)]
+    
+    #Significant for both, but up in SC and down in kl. 
+    upsc_downkl = list(kl_sc_PKA_data_klscsig[(kl_sc_PKA_data_klscsig['log2FoldChange_SC']>0)&(kl_sc_PKA_data_klscsig['log2FoldChange_KL']<0)]['sc_genename'])
+    print("Genes that are up in S.Cer and Down in K.Lac")
+    print(upsc_downkl)
+    #HEF3 {'YNL014W'}
+    
+    upkl_downsc = list(kl_sc_PKA_data_klscsig[(kl_sc_PKA_data_klscsig['log2FoldChange_SC']<0)&(kl_sc_PKA_data_klscsig['log2FoldChange_KL']>0)]['sc_genename'])
+    print("Genes that are up in K.Lac and Down in S.Cer")
+    print(upkl_downsc)
+    
+    #Add in the one gene that is significant for both but repressed in SC and activated in KL. 
+    klsig_act_genes = list(kl_sc_PKA_data_klsig_scunsig[kl_sc_PKA_data_klsig_scunsig['log2FoldChange_KL']>0]['sc_genename'])
+    for gene in upkl_downsc: 
+        klsig_act_genes.append(gene)
+    
+    #Add in the one gene that is significant for both but activated in SC and repressed in KL.
+    klsig_rep_genes = list(kl_sc_PKA_data_klsig_scunsig[kl_sc_PKA_data_klsig_scunsig['log2FoldChange_KL']<0]['sc_genename'])
+    for gene in upsc_downkl: 
+        klsig_rep_genes.append(gene)
+    
+    #Add in the one gene that is significant for both but activated in SC and repressed in KL.
+    scsig_act_genes = list(kl_sc_PKA_data_scsig_klunsig[kl_sc_PKA_data_scsig_klunsig['log2FoldChange_SC']>0]['sc_genename'])
+    for gene in upsc_downkl: 
+        scsig_act_genes.append(gene)
+    
+    #Add in the one gene that is significant for both but repressed in SC and activated in KL. 
+    scsig_rep_genes = list(kl_sc_PKA_data_scsig_klunsig[kl_sc_PKA_data_scsig_klunsig['log2FoldChange_SC']<0]['sc_genename'])
+    for gene in upkl_downsc: 
+        scsig_rep_genes.append(gene)
+    
+    gene_set_dict = {'klsig_act': klsig_act_genes,
+                    'klsig_rep': klsig_rep_genes,
+                    'scsig_act': scsig_act_genes,
+                    'scsig_rep': scsig_rep_genes,
+                    'klscsig_act': list(kl_sc_PKA_data_klscsig[(kl_sc_PKA_data_klscsig['log2FoldChange_SC']>0) & (kl_sc_PKA_data_klscsig['log2FoldChange_KL']>0)]['sc_genename']),
+                    'klscsig_rep': list(kl_sc_PKA_data_klscsig[(kl_sc_PKA_data_klscsig['log2FoldChange_SC']<0) & (kl_sc_PKA_data_klscsig['log2FoldChange_KL']<0)]['sc_genename']),
+                    'klscunsig': list(kl_sc_PKA_data_unsig['sc_genename'])
+                    }
+    return gene_set_dict
 
-    group = pd.Series(group, index = A.index)
-
-    return group
-
+## Topology determination
 def build_phylo_conversion_sc():
     #builds file for name conversion from phylome_db tree files. 
     #that file can be read in with pd.read_table()
@@ -1745,7 +1842,6 @@ def build_phylo_conversion_kl():
                         print('Done')
                         break
     return
-
 
 def assign_topologies(trees, WGH_branch_seed, KLE_branch_seed, ZT_branch_seed, outgroups, verbose = False):
     topology_dict = {WGH_branch_seed: "C", KLE_branch_seed: "A", ZT_branch_seed:"B"}
@@ -1898,7 +1994,6 @@ def assign_single_topology(gene,leaf_subset,tree, KLE_branch_seed, WGH_branch_se
     
     return topology_out
 
-
 def assign_joint_topology(genes, leaf_subset, tree, single_topologies, paralog_labels, sc_genes, KLE_branch_seed, WGH_branch_seed, ZT_branch_seed, verbose):
     
     leaf_subset_spec = [name.split("_")[1] for name in leaf_subset]
@@ -1995,45 +2090,40 @@ def consistant_joint_topologies(ortholog_dataset, paralog_labels, resolution):
 
     return(ind_list)
 
-def get_other_paralogs_from_dataframe(genes, dataframe): 
-    #using an input list of genes that have paralogs, and a dataframe that contains its paralogs, outputs a dataframe that
-    #has just the other paralogs that are not listed. 
-    #the genes must be listed as the SC_common_name, and the dataframe must have sc_genename and kl_genename fields. 
-    N_genes_in = len(genes)
-    dataframe_genes = dataframe[dataframe['SC_common_name'].isin(genes)]
-    sc_genenames = dataframe_genes['sc_genename']
-    kl_genenames = dataframe_genes['kl_genename']
-    dataframe_all = dataframe[dataframe['kl_genename'].isin(kl_genenames)]
-    sc_genenames_all = dataframe_all['sc_genename']
-    sc_genenames_paralogs = list(set(sc_genenames_all)-set(sc_genenames))
-    N_genes_out = len(sc_genenames_paralogs)
-    if N_genes_in != N_genes_out: 
-        print("number of genes in not equal to number of genes out - maybe one of the input genes doesn't have a paralog, or it is not contained in the dataframe") 
-    dataframe_paralogs = dataframe_all[dataframe_all['sc_genename'].isin(sc_genenames_paralogs)]
-    
-    return(dataframe_paralogs)
-    
-    
-    return 
+#Helper functions
+def tryfloatconvert(value, default):
+    try:
+        return float(value)
+    except ValueError:
+        return default
 
-def get_gis1_rph1_sets(act_threshold, inh_threshold, kl_sc_PKA_data_subset, condition = 'log'): 
-    #Use cutoff to assign activated, inhibited, and repressed for gis1, rph1 and gis1rph1 for each condition in the westholm dataset
-    #input is
-    #   threshold levels 
-    #   kl_sc_PKA_data_subset - must have the columns for the data: ['log_g-wt','log_r-wt', 'log_gr-wt']
-    # condition can be 'log', 'PDS' or '3d' for 3days stationary phase
+def quantileNormalize(df_input):
+    #From: https://github.com/ShawnLYU/Quantile_Normalize
+    #computes quantile normalization on a dataframe composed of floating point numbers
+    #For instance the columns could all be replicates of a microarray experiment. 
+    df = df_input.copy()
+    #compute rank
+    dic = {}
+    for col in df:
+        dic.update({col : sorted(df[col])})
+    sorted_df = pd.DataFrame(dic)
+    rank = sorted_df.mean(axis = 1).tolist()
+    #sort
+    for col in df:
+        t = np.searchsorted(np.sort(df[col]), df[col])
+        df[col] = [rank[i] for i in t]
+    return df
     
-    rg_columns = [condition + '_g-wt',condition + '_r-wt', condition + '_gr-wt']
-    for column in rg_columns: 
-        kl_sc_PKA_data_subset[column+'_label'] = threshold_group_series(kl_sc_PKA_data_subset[column], act_threshold, inh_threshold )
+def correlation_nan_filt(v1, v2): 
+    
+    v1_nan = np.isnan(v1)
+    v2_nan = np.isnan(v2)
 
-    strains = ['g','r','gr']
-    gr_sets = {}
-    exp_profiles = tuple(product(['up','flat','down'],['up','flat','down'],['up','flat','down']))
-    for g_label, r_label, gr_label in exp_profiles:
-        gr_sets['g-'+g_label + '_r-'+r_label + '_gr-'+gr_label] = list(kl_sc_PKA_data_subset[(kl_sc_PKA_data_subset[condition + '_g-wt_label']==g_label) &
-                                                                      (kl_sc_PKA_data_subset[condition + '_r-wt_label']==r_label) &
-                                                                      (kl_sc_PKA_data_subset[condition + '_gr-wt_label']==gr_label)]['sc_genename'])
+    v1_v2_nan = v1_nan+v2_nan
 
+    v1_filt = [item for jj, item in enumerate(v1) if ~v1_v2_nan[jj]]
+    v2_filt = [item for jj, item in enumerate(v2) if ~v1_v2_nan[jj]]
 
-    return kl_sc_PKA_data_subset, gr_sets
+    corr_dist = spd.correlation(v1_filt, v2_filt)
+    
+    return corr_dist

@@ -210,12 +210,10 @@ def multi_scatter_plot(expression_data, conditions, xlimit = [], xticks = [], yl
                 ax.set_title(conditions[kk])
     return fig, axarr
     
-def lfc_padj_plot_with_lines(x_data,y_data,hover_text,line_coords):
-    #line_coords is of the form: [(x1,y1),(x2,y2), ymin]
-    x1,y1 = line_coords[0]
-    x2,y2 = line_coords[1]
-    ymin = line_coords[2]
-    
+def lfc_padj_plot_with_lines(x_data,y_data,hover_text,lines):
+    #lines is a dictionary with the line name as key and the item as
+    #[(x1,y1),(x2,y2)]
+   
 
     data = []
 
@@ -230,19 +228,46 @@ def lfc_padj_plot_with_lines(x_data,y_data,hover_text,line_coords):
             )
         
     data.append(trace)
+    
+    for line_name, line in lines.items():
 
-    x = np.array([x1,x2])
+        x1,y1 = line[0]
+        x2,y2 = line[1]
+        
+        x = np.array([x1,x2])
+        y = np.array([y1,y2])
 
-    trace2 = pygo.Scatter(
-        x = x,
-        y = y2- (y2-y1)/(x2-x1)*(x2-x),
-        mode = 'lines',
-        marker = {'color': 'black',
-                  'size': 5},
-        name = 'LFC/padj threshold'
+        trace2 = pygo.Scatter(
+            x = x,
+            y = y,
+            mode = 'lines',
+            marker = {'color': 'black',
+                      'size': 5},
+            name = line_name
+        )
+    
+        data.append(trace2)
+    
+    layout = pygo.Layout(
+        xaxis= {
+            #"range":[-2, 20],
+            "title":'LFC'
+        },
+        yaxis= {
+            #"range":[-2, 20],
+            "title":'-log10(pvalue)'
+        },
+        showlegend=False
     )
 
-    data.append(trace2)
+
+    fig = pygo.Figure(data=data, layout = layout) 
+    
+    return fig
+
+def pval_min_line(line_coords, ymin, x_data): 
+    x1,y1 = line_coords[0]
+    x2,y2 = line_coords[1]
     
     if y2-y1<0: #Line has negative slope - looking at right side of axis
         x_at_ymin1 = x1
@@ -252,34 +277,7 @@ def lfc_padj_plot_with_lines(x_data,y_data,hover_text,line_coords):
         x_at_ymin1 = x2
         x_at_ymin2 = min(x_data)
     
-    x = np.array([x_at_ymin1, x_at_ymin2])
-    y = np.array([ymin, ymin])
-
-    trace3 = pygo.Scatter(
-        x = x,
-        y = y,
-        mode = 'lines',
-        marker = {'color': 'black',
-                  'size': 5},
-        name = 'padj threshold'
-    )
-
-
-    data.append(trace3)
-
-    layout = pygo.Layout(
-        xaxis= {
-            #"range":[-2, 20],
-            "title":'LFC'
-        },
-        yaxis= {
-            #"range":[-2, 20],
-            "title":'-log10(padj)'
-        }
-    )
-
-
-    fig = pygo.Figure(data=data, layout = layout) 
+    p1 = (x_at_ymin1, ymin)
+    p2 = (x_at_ymin2, ymin)
     
-    return fig
-
+    return p1,p2

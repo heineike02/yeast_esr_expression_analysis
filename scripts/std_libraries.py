@@ -37,6 +37,8 @@ import matplotlib.pyplot as plt
 #import subprocess
 #import networkx as nx
 #import scipy.stats as stats
+#import statsmodels.api as sm
+#import scipy.spatial.distance as spd
 #import statsmodels.graphics.gofplots as stats_graph
 #import scipy.cluster.hierarchy as sch
 
@@ -52,7 +54,7 @@ from collections import Counter
 # from itertools import chain
 #from itertools import product
 #this only works if you are online
-online_input = input("are you online? Yes/No")
+online_input = input("are you online? Yes/No ")
 if online_input == "Yes": 
     import plotly.plotly as py
     import plotly.graph_objs as pygo
@@ -69,3 +71,10 @@ if online_input == "Yes":
 #for scraping internet data (e.g. ncbi)
 #import requests
 #from lxml import etree    #parses xml output
+
+spec_lookup = {'Klac' : 'Kluyveromyces lactis', 'Scer': 'Saccharomyces cerevisiae', 
+ 'Cgla' : 'Candida glabrata' , 'Ncas': 'Naumovozyma castellii', 
+ 'Sbay' : 'Saccharomyces bayanus', 'Smik': 'Saccharomyces mikatae',
+ 'Lwal' : 'Lachancea waltii', 'Spar' : 'Saccharomyces paradoxus', 
+ 'Lklu' : 'Lachancea kluyverii', 'Dhan': 'Debaryomyces hansenii', 
+ 'Calb' : 'Candida albicans', 'Ylip': 'Yarrowia lipolytica'}
