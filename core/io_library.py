@@ -12,6 +12,7 @@ print('I am importing io_library')
 import matplotlib.pyplot as plt
 from Bio.Seq import Seq
 from Bio.Alphabet import generic_dna
+from Bio import SeqIO
 #from ete3 import Tree
 #ete3 is not officially supported on windows, and so must be loaded via pip: 
 # pip install -U https://github.com/etetoolkit/ete/archive/qt5.zip
@@ -1502,10 +1503,128 @@ def hex_color_dictionary(input_list):
     
     return input_color_dict
 
+def exact_promoter_scan(motif, prom_seq, output_format='count', sequence_context=0):
+    #Finds a motif in a sequence object
+    # 
+    #Inputs: 
+    #    motif:  A string which is the motif we wish to search (used in re.finditer) ex: 'CCCCT'. 
+    #    prom_seq: biopython Seq object.  It will be scanned both forward and backward.  
+    #        output_format: if 'count', then just lists the number of hits, if 'full', gives the location, 
+    #        direction (relative to the gene), and sequence context (number of bases on either side of the hit)
+    #
+    #Output: depending on output format is either a number of found motifs, or a list of tuples with one tuple for each hit.  
+    #    The tuple contains the location (with refrence to the forward sequence), 
+    #    fwd or rev, and the match with surrounding context bases. 
+    #
+    #Revision notes: this function is for a single sequence - same name used to be for one that searched a list of genes 
+    # now that can be done with exact_promoter_scan_genelist or exact_promoter_scan_from_fasta
+    #
+    # For some reason I had str(prom_seq) rather than str(prom_seq.seq) until 121718
+
+    L_motif = len(motif)
+
+    #fwd search
+    prom_seq_fwd = str(prom_seq.seq)
+    L_prom = len(prom_seq_fwd)
+    motif_sites_fwd = [m.start() for m in re.finditer(motif, prom_seq_fwd)]
+    #to find overlapping motifs
+    #[m.start() fr m in re.finditer('(?=' + motif + ')', prom_seq_rev)]
+
+    #reverse search
+    #rev search
+    prom_seq_rev = str(prom_seq.reverse_complement().seq)
+    #location is in reference to the fwd seq
+    motif_sites_rev = [len(prom_seq_rev) - m.start() - L_motif for m in re.finditer(motif, prom_seq_rev)]
+
+    if output_format == 'count':  
+        n_motifs_gene = len(motif_sites_fwd) + len(motif_sites_rev)
+        output = n_motifs_gene
+    elif output_format == 'full': 
+        loc_hitseq_gene = []
+        for motif_site in motif_sites_fwd: 
+            loc = L_prom-1-motif_site
+            hitseq = prom_seq_fwd[motif_site-sequence_context:motif_site+L_motif+sequence_context]  
+            hitdir = 'fwd'
+            loc_hitseq_gene.append((loc,hitdir,hitseq))
+        for motif_site in motif_sites_rev: 
+            loc = L_prom - motif_site+L_motif
+            hitseq = prom_seq_rev[(L_prom-motif_site-L_motif-sequence_context):(L_prom-motif_site+sequence_context)]
+            hitdir = 'rev'
+            loc_hitseq_gene.append((loc,hitdir,hitseq))
+
+        if len(loc_hitseq_gene)==0: 
+            output = None
+        else:
+            output = loc_hitseq_gene
+    else: 
+        print("choose output_format: 'count' or 'full' ")
+        
+    return output
+
+def exact_promoter_scan_from_fasta(promoters_fname, motif_dict, output_format = 'counts', sequence_context = 0, seq_key_func = lambda seq : seq.id, L_prom = None): 
+    #For a fasta file of promoters (with Id and sequence for each line) and a dictionary of exact motifs finds counts, location, and sequence context of found motifs.
+    #
+    #Input: 
+    #    promoters_fname: filename of promoter fasta file
+    #    motif_dict: Dictionary of exact motifs to be used e.g. {'STRE': 'CCCCT'} 
+    #    output_format: 'counts'(default) or 'full'.  If 'full' is selected will also output a list of tuples containing the location of the 
+    #               found motif, and the sequence (with sequence context) of the motif 
+    #    sequence_context:  number of bases surrounding the found motif to print in full output mode (default is 0)
+    #    L_prom: desired promoter length - will shorten the length of the promoter if the input from the fasta is longer than this.  If the promoter is shorter than the given length then the full promoter will be used.  The default is None which uses the whole sequence.  
+    #
+    #Output: Dataframe with each row being the id of the gene and columns for each motif with counts and, if 'full' output mode is selected, 
+    #        a full_features column with all features for each hit (a list of tuples), and None if there are no hits
+
+    record_iterator = SeqIO.parse(promoters_fname, "fasta")                                                         
+
+    output_dict = {}
+    columns = []
+
+    for motif_name, motif in motif_dict.items():
+        if output_format=='count': 
+            columns.append(motif_name + '_count')
+        elif output_format=='full': 
+            columns = columns + [motif_name + '_' + feature for feature in ['count', 'full_features']]   
+        else: 
+            print('Invalid output_format : ' + output_format)
+
+    for seq in record_iterator: 
+        gene_id = seq_key_func(seq)
+        L_seq = len(seq)
+        if L_prom == None:
+            seq_cropped=seq
+        else:
+            if L_seq > L_prom: 
+                seq_cropped = seq[(L_seq-L_prom):]
+            else: 
+                seq_cropped = seq
+        output_row = []
+        for motif_name, motif in motif_dict.items():
+            if output_format=='count': 
+                prom_hits = exact_promoter_scan(motif, seq_cropped, output_format=output_format, sequence_context = sequence_context)
+                output_row.append(prom_hits)   #append counts
+            elif output_format=='full': 
+                prom_hits = exact_promoter_scan(motif, seq_cropped, output_format=output_format, sequence_context = sequence_context)
+                #add output in the order of columns
+                if prom_hits == None: 
+                    counts = 0
+                else: 
+                    counts = len(prom_hits)
+                output_row.append(counts)     #append count
+                output_row.append(prom_hits)  #append full_features
+
+        output_dict[gene_id] = output_row
+
+    output = pd.DataFrame.from_dict(output_dict, orient="index", columns = columns)
+
+    return output
+
 def exact_promoter_scan_genelist(gene_list, motif_dict, promoter_database, output_format = 'counts', sequence_context = 0): 
     #finds nonoverlapping exact matches forward and backward for motifs. 
-    #input:  motif dictionary, promoter data structure, gene list from dataframe (genes must be primary key of promoter data structure)
-    #output_format: 'counts'(default) or 'full'.  If 'full' is selected each entry is a list of tuples containing the location of the 
+    #input:  motif_dict,  Dictionary of exact motifs to be used e.g. {'STRE': 'CCCCT'} 
+    #        promoter_database 
+    #        gene_list from dataframe (genes must be primary key of promoter data structure)
+    #        output_format: 'counts'(default) or 'full'.  If 'full' is selected each entry is a list of tuples containing the location of the 
     #               found motif, and the sequence (with sequence context) of the motif 
     #sequence_context: default 0.  How many bases on either side of the motif to display in the output. 
     #output: dataframe with primary key as gene list.  columns are presence of scanned motifs - either counts or location data. 
@@ -1561,55 +1680,7 @@ def exact_promoter_scan_genelist(gene_list, motif_dict, promoter_database, outpu
     
     return output_data_frame
 
-def exact_promoter_scan(motif, prom_seq, output_format='count', sequence_context=0):
-    #this function is for a single sequence - same name used to be for one that searched a list of genes 
-    # now called exact_promoter_scan_genelist
-    # 
-    # scans a sequence (biopython object) for a motif in both forward and backward directions 
-    # If output format is 'count', then just lists the number of hits. 
-    # If output format is 'full', gives the location, direction (relative to the gene), and
-    # sequence context (number of bases on either side of the hit)output_format
-    
 
-    L_motif = len(motif)
-
-    #fwd search
-    prom_seq_fwd = str(prom_seq)
-    L_prom = len(prom_seq_fwd)
-    motif_sites_fwd = [m.start() for m in re.finditer(motif, prom_seq_fwd)]
-    #to find overlapping motifs
-    #[m.start() fr m in re.finditer('(?=' + motif + ')', prom_seq_rev)]
-
-    #reverse search
-    #rev search
-    prom_seq_rev = str(prom_seq.reverse_complement())
-    #location is in reference to the fwd seq
-    motif_sites_rev = [len(prom_seq_rev) - m.start() - L_motif for m in re.finditer(motif, prom_seq_rev)]
-
-    if output_format == 'count':  
-        n_motifs_gene = len(motif_sites_fwd) + len(motif_sites_rev)
-        output = n_motifs_gene
-    elif output_format == 'full': 
-        loc_hitseq_gene = []
-        for motif_site in motif_sites_fwd: 
-            loc = L_prom-1-motif_site
-            hitseq = prom_seq_fwd[motif_site-sequence_context:motif_site+L_motif+sequence_context]  
-            hitdir = 'fwd'
-            loc_hitseq_gene.append((loc,hitdir,hitseq))
-        for motif_site in motif_sites_rev: 
-            loc = L_prom - motif_site+L_motif
-            hitseq = prom_seq_rev[(L_prom-motif_site-L_motif-sequence_context):(L_prom-motif_site+sequence_context)]
-            hitdir = 'rev'
-            loc_hitseq_gene.append((loc,hitdir,hitseq))
-
-        if len(loc_hitseq_gene)==0: 
-            output = None
-        else:
-            output = loc_hitseq_gene
-    else: 
-        print("choose output_format: 'count' or 'full' ")
-        
-    return output
 
 def merge_overlap_column(series_a, series_b):
     #for two string columns in an outer merge that should have identical entries except where 

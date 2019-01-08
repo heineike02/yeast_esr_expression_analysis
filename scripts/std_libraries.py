@@ -62,8 +62,12 @@ if online_input == "Yes":
     py.sign_in('heineike02_student','9dMTMZgJMgUP0YX0P5mQ')
     #py.sign_in('heineike02', 'APPjKrtARaN2ZgUYIkqr')
     
-# for phylogenetic trees: 
-# from ete3 import Tree
+# # for phylogenetic trees: 
+# from ete3 import Tree, SeqMotifFace, TreeStyle, add_face_to_node  #the last three are for visualization
+# # In order to view ete3 created trees on the gpucluster, you need to use a virtual X server:
+# from pyvirtualdisplay import Display
+# display = Display(visible=False, size=(1024, 768), color_depth=24)
+# display.start()
 #ete3 is not officially supported on windows, and so must be loaded via pip: 
 # pip install -U https://github.com/etetoolkit/ete/archive/qt5.zip
 # ref: https://groups.google.com/forum/#!topic/etetoolkit/6NblSBPij4o
