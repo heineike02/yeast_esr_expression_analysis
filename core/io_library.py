@@ -6,6 +6,7 @@ import numpy as np
 import re
 import math
 import scipy.stats as stats
+import scipy.spatial.distance as spd
 from collections import Counter
 import subprocess
 print('I am importing io_library')
@@ -37,7 +38,8 @@ spec_lookup = {'Klac' : 'Kluyveromyces lactis', 'Scer': 'Saccharomyces cerevisia
  'Sbay' : 'Saccharomyces bayanus', 'Smik': 'Saccharomyces mikatae',
  'Lwal' : 'Lachancea waltii', 'Spar' : 'Saccharomyces paradoxus', 
  'Lklu' : 'Lachancea kluyverii', 'Dhan': 'Debaryomyces hansenii', 
- 'Calb' : 'Candida albicans', 'Ylip': 'Yarrowia lipolytica'}
+ 'Calb' : 'Candida albicans', 'Ylip': 'Yarrowia lipolytica', 
+ 'Sjap' : 'Schizosaccharomyces japonicus' , 'Spom' : 'Schizosaccharomyces pombe' }
 
 print("data processing dir is " + data_processing_dir )
 
@@ -77,7 +79,83 @@ def get_sgd_description(sc_genename_list):
     return description_list
 
 ### Other external data
-def parse_raw_exp(spec, fname=None):
+
+def make_platform_dict(spec):
+    #For a given species, uses a gene expression dataset from the Tsankov et al Raw Expression data to build a map from 
+    #gene ID to gene name.  Stores the output as a .csv
+    
+    id_source_data_inds = {'Klac': 'GSE22198', 'Scer': 'GSE22204', 
+                            'Cgla':'GSE22194', 'Ncas' : 'GSE22200', 
+                            'Sbay' : 'GSE22205', 'Suva' : 'GSE22205',  #Spar uses the same gene names as sbayanus - in this study they thought of it as a variant of bayanus.    
+                            'Smik': 'GSE22201', 
+                            'Lwal': 'GSE22199', 'Spar': 'GSE22193', 
+                            'Lklu': 'GSE22202', 'Dhan': 'GSE22191', 
+                            'Calb': 'GSE22197', 'Ylip': 'GSE22192'}
+    orf_header_names = {spec_ohn : 'SystematicName' for spec_ohn in ['Klac', 'Cgla', 'Ncas', 'Sbay', 'Suva', 'Smik', 'Lwal', 'Spar','Dhan', 'Calb', 'Ylip']}
+    orf_header_names['Scer']='ACCESSION_STRING'
+    orf_header_names['Lklu'] = 'Gene'
+    for spec_ohn in ['Vpol','Sjap','Spom']: 
+        orf_header_names[spec_ohn] = 'ORF'
+    
+    orfmap_fname_out = os.path.normpath(data_processing_dir + 'regev_data/platform_ids/' + spec + '_ids.csv')
+    
+    if spec in ['Vpol','Sjap','Spom']: 
+        orfmap_fname = os.path.normpath(data_processing_dir + 'regev_data/platform_ids/' + spec + '_ids.txt')
+        platform_df = pd.read_table(orfmap_fname, comment='#', index_col=0)
+        #Switch name for 'Vpol' to match orthogroups
+        if spec == 'Vpol':
+            vpol_rename = []
+            for orf_name in platform_df.loc[:,orf_header_names[spec]]:
+                kpol_ind = orf_name.split('Kpol')[1]
+                orf_name_new = 'Kpol_' + kpol_ind.split('p')[0] + '.' + kpol_ind.split('p')[1]
+                vpol_rename.append(orf_name_new)
+            platform_df['YGOB_orf'] = vpol_rename
+            platform_dict =  dict(platform_df.loc[:,'YGOB_orf'])
+        else: 
+            platform_dict =  dict(platform_df.loc[:,orf_header_names[spec]])
+    
+    else: 
+    
+        orfmap_fname = os.path.normpath(data_processing_dir + 'regev_data/platform_ids/' + id_source_data_inds[spec] + '_family.soft')
+
+        with open(orfmap_fname) as f:
+            # Find line that starts table listing gene names and index numbers
+            for line in f: 
+                if line.split()[0] == '!platform_table_begin':
+                    break
+
+            #Find index of header that will identify orf
+            line = next(f)
+            linesp = line.split()
+            orf_header_ind = linesp.index(orf_header_names[spec])
+
+            platform_dict = {}
+            for line in f: 
+                linesp = line.split('\t')
+                if linesp[0] == "!platform_table_end\n":
+                    #include new line because this splits on tab.  
+                    break 
+
+                orf_ind = linesp[0]
+                #S. Cerevisiae orf names are formatted differently than other species. 
+                if spec == 'Scer':                       
+                    orf_name = linesp[orf_header_ind].split('|')[1]
+                else: 
+                    orf_name = linesp[orf_header_ind]
+                
+                #converts index to integer except in SCer where it is a string
+                if spec == 'Scer': 
+                    platform_dict[orf_ind] = orf_name  
+                else:
+                    platform_dict[int(orf_ind)] = orf_name
+
+    
+    pd.Series(platform_dict).to_csv(orfmap_fname_out)
+    print(orfmap_fname_out + ' saved')
+    
+    return platform_dict
+
+def parse_raw_exp(spec, platform_dict, save_file=True):
     #for a given species abbreviation and optional filename returns a dataframe with expression data from 
     #Tsankov et al 2010.   
     #Returns a dictionary which lists the platform mapping (from microarray to gene) and a dataframe of 
@@ -88,75 +166,13 @@ def parse_raw_exp(spec, fname=None):
                         'Lwal': 'GSE22199', 'Spar': 'GSE22193', 
                         'Lklu': 'GSE22202', 'Dhan': 'GSE22191', 
                         'Calb': 'GSE22197', 'Ylip': 'GSE22192'}
-    orf_header_names = {spec : 'SystematicName' for spec in ['Klac', 'Cgla', 'Ncas', 'Sbay', 'Smik', 'Lwal', 'Spar','Dhan', 'Calb', 'Ylip']}
-    orf_header_names['Scer']='ACCESSION_STRING'
-    orf_header_names['Lklu'] = 'Gene'
-
-    #data cleaning notes: 
-    #Kluyveromyces Lactis: No expression value listed - made NA
-    #gene, line
-    #11892, 7334
-    #14495, 9937
-    #13495, 14311
-    #14052, 14868
-    #10964, 17154
-    #12500, 18690
-    #Did not need clean data for other species - made an if loop to catch it. 
-
-    #KLac had four samples    
-    orfmap_fname = os.path.normpath(data_processing_dir + 'regev_data/raw_exp/' + raw_exp_data_inds[spec] + '_family.soft')
-    with open(orfmap_fname) as f:
-        # identify samples in the dataset
-        # Skips text before the line that says beginning of the interesting block:
-        sample_datasets = []
-        for line in f:
-            if line.split()[0]== '!Series_sample_id':
-                break
-
-        sample_datasets.append(line.split()[2])
-        #Tracer()()
-        for line in f: 
-            if line.split()[0] != '!Series_sample_id':
-                break
-            sample_datasets.append(line.split()[2])
-
-        # get list of orfs with index numbers
-
-        # Find line that starts table listing gene names and index numbers
-        for line in f: 
-            if line.split()[0] == '!platform_table_begin':
-                break
-
-        #Find index of header that will identify orf
-        line = next(f)
-        linesp = line.split()
-        orf_header_ind = linesp.index(orf_header_names[spec])
-
-        data_dict = {}
-        platform_dict = {}
-        for line in f: 
-            linesp = line.split('\t')
-            if linesp[0] == "!platform_table_end\n":
-                #include new line because this splits on tab.  
-                break 
-
-            orf_ind = linesp[0]
-            #S. Cerevisiae orf names are formatted differently than other species. 
-            if spec == 'Scer':                       
-                orf_name = linesp[orf_header_ind].split('|')[1]
-            else: 
-                orf_name = linesp[orf_header_ind]
-
-            platform_dict[orf_ind] = orf_name  
-
-    platform_dict
-
+    
     #Load expression data
     raw_exp_fname = os.path.normpath(data_processing_dir + 'regev_data/raw_exp/' + raw_exp_data_inds[spec] + '_series_matrix.txt')
     raw_exp = pd.read_table(raw_exp_fname, comment = '!')
 
     #Make column for orf names
-    orf_names = [platform_dict[str(platform_id)] for platform_id in raw_exp['ID_REF']]
+    orf_names = [platform_dict[platform_id] for platform_id in raw_exp['ID_REF']]
     raw_exp['orf_name'] = orf_names
     raw_exp.drop(columns='ID_REF', inplace = True)
     #Take median of all data that has more than one spot per orf 
@@ -164,8 +180,7 @@ def parse_raw_exp(spec, fname=None):
     grouped = raw_exp.groupby('orf_name')
     raw_exp_med = grouped.median()
 
-    #Quantile normalize data across replicates and then calculate mean of the normal columns. 
-    #I wonder if it would be better to take the median to reduce the effect of outliers?
+    #Quantile normalize data across replicates and then calculate median of the normalized columns. 
     raw_exp_med_qnorm = quantileNormalize(raw_exp_med)
     raw_exp_med_qnorm['med_qnorm'] = raw_exp_med_qnorm.median(axis = 'columns')
     raw_exp_med_qnorm['std_qnorm'] = raw_exp_med_qnorm.std(axis = 'columns')
@@ -174,21 +189,52 @@ def parse_raw_exp(spec, fname=None):
     ## Didn't seem to have a problem with nan's now that I am using pd.read_table.  If it comes up this might help: 
     # raw_exp[sample_datasets]= raw_exp[sample_datasets].applymap(lambda x: tryfloatconvert(x,np.nan))
 
-    if fname != None: 
+    if save_file: 
+        fname = data_processing_dir + os.path.normpath('regev_data/raw_exp/' + spec + '_raw_exp.csv')
         raw_exp_out.to_csv(fname)
-    return raw_exp_out , platform_dict                    
+        print(fname + ' saved')
+    return raw_exp_out                    
     
-def parse_micro_data(species, exptype, orf_lookup): 
-    #load raw data for a given species/experiment type pair.  Third argument is an orf lookup table
-    #which is a from parse_raw_exp
-    #Note:  Need to change orf_lookup to platform_dict which is the new output (just a dictionary) from parse_raw_exp
+
+def parse_micro_data(spec, exptype, platform_dict): 
+    #load raw data for a given species/experiment type pair.  
+    #
+    #Inputs: 
+    #    spec: species four letter abbreviation
+    #    exptype: "Growth" or "Stress"
+    #    platform_dict:  dictionary linking orf_name to spot id on the microarray.  comes from make_platform_dict
+    #
+    #Output: 
+    #    expdata_sorted: dataframe with multindex with ID_REF and orf_name as levels for rows, and 
+    #        columns for all the data with a multiindex 
+    #        that contains condition, replicate name, and the array id for the data. 
+    #
+    
+    
     exptype_prefixes = {'Growth': '36253', 'Stress': '38478'}
-    platform_prefixes = {'Kluyveromyces lactis': '10499', 'Saccharomyces cerevisiae': '9294', 'Candida glabrata':'10497', 'Naumovozyma castellii' : '10501', 'Saccharomyces bayanus' : '10505', 'Saccharomyces mikatae': '10502', 'Lachancea waltii': '10500', 'Saccharomyces paradoxus': '10496', 'Lacancea kluyverii': '10503', 'Debaryomyces hansenii': '15298', 'Vanderwaltozyma polyspora': '15297' }
-    
-    input_fname = os.path.normpath(data_processing_dir + '/regev_data/GSE' + exptype_prefixes[exptype] + '_' + exptype + '/GSE'+ exptype_prefixes[exptype] + '-GPL' + platform_prefixes[species] + '_series_matrix.txt')
+    platform_prefixes = {'Klac': '10499', 'Scer': '9294',
+            'Cgla':'10497', 'Ncas' : '10501', 
+            'Sbay' : '10505', 'Suva': '10505',  #Sbay and Suva in the same dataset - require special handling
+            'Smik': '10502', 
+            'Lwal': '10500', 'Spar': '10496', 
+            'Lklu': '10503', 'Dhan': '15298', 
+            'Vpol': '15297', 'Calb': '10498', 
+            'Ylip': '10495', 'Sjap': '15299',
+            'Spom': '15300' }
+
+    input_fname = os.path.normpath(data_processing_dir + '/regev_data/GSE' + exptype_prefixes[exptype] + '_' + exptype + '/GSE'+ exptype_prefixes[exptype] + '-GPL' + platform_prefixes[spec] + '_series_matrix.txt')
+
+    expdata = pd.read_table(input_fname, comment = '!', index_col=0)
+
+    #if species is Scer drops everything after the index "DarkCorner" - those are a set of controls built into the microarray that we don't have data for and don't use. 
+    if spec == 'Scer':
+        expdata.drop(index=expdata.loc["DarkCorner":].index, inplace=True)
+
+
+    # Get list of conditions and repicates 
     with open(input_fname) as f:
         if exptype == 'Growth': 
-            
+
             #Make condition list and replicate list
             for line in f:
                 if line == '\n':
@@ -199,9 +245,9 @@ def parse_micro_data(species, exptype, orf_lookup):
                     conditions = [re.split("[\-\[\]]",title)[1] for title in condition_titles.split('\t')[1:]]
                     replicates = [re.split("[\-\[\]]",title)[2] for title in condition_titles.split('\t')[1:]]
                     break
-        
+
         elif exptype == 'Stress': 
-            
+
             #Make replicate list 
             for line in f:
                 if line == '\n':
@@ -211,7 +257,7 @@ def parse_micro_data(species, exptype, orf_lookup):
                     replicate_titles = line
                     replicates = [re.split("[\"_]",title)[2] for title in replicate_titles.split('\t')[1:]]
                     break
-                    
+
             #Make condition list by concatenating stress and time information for each microarray
             for line in f:
                 if line.split()[0]== '!Sample_characteristics_ch1':
@@ -225,119 +271,187 @@ def parse_micro_data(species, exptype, orf_lookup):
                     break
             conditions = ['{}_{:03d}'.format(tup[0],int(tup[1])) for tup in zip(condition_stresses,condition_times)]
 
-            
-                
-        #scroll to beginning of data table and extract ids for each experiment
-        for line in f:
-            if line.split()[0]== '"ID_REF"':
-                condition_ids = line.split()[1:]
-                condition_ids = [condition_id.strip('"') for condition_id in condition_ids]
-                break
-        
-        #store data for each experiment
-        expdata_ungrouped = {}    
-        for line in f: 
-            linesp = line.split()
-            if linesp[0] in ['"DarkCorner"','!series_matrix_table_end' ]:
-                #"DarkCorner" is the beginning in a set of controls for the SCer chip.  
-                # The data table for the other species ends at the line !series_matrix_table_end
-                break
-            chip_location_ID = linesp[0].strip('"')
-            chip_location_values = linesp[1:]
-            chip_location_values = [tryfloatconvert(value,np.nan) for value in chip_location_values]
-            expdata_ungrouped[chip_location_ID] = chip_location_values
-        
-        #build dataframe from expdata_ungrouped
-        expdata = pd.DataFrame.from_dict(expdata_ungrouped, orient = 'index')
-        #sort ids alphanumerically (not sure whether this is necessary)
-        expdata.sort_index(axis=0, inplace=True)
-        #Sets a multi index for conditions and replicates
-        col_mindex_arrays = [conditions,replicates,condition_ids]
-        col_mindex_tuples = list(zip(*col_mindex_arrays))
-        col_mindex = pd.MultiIndex.from_tuples(col_mindex_tuples, names=['conditions', 'replicates','array_ids'])
-        expdata.columns = col_mindex
-        #sort by conditions
-        expdata_sorted = expdata.sort_index(level = 'conditions',axis = 'columns')
-        #add in index of gene names (maybe have multi-index or just replace id numbers)
-        if False in (expdata_sorted.index == orf_lookup.index):
-            print("Error: ID mismatch between experiment data and orf lookup table. Species = {}, Experiment Type = {}".format(species, exptype))
-            return
-        
-        #if no error, continue here
-        print("All ID's match between experiment data and orf lookup table. Species = {}, Experiment Type = {}".format(species, exptype))
-        
-        mindex_arrays = [np.array(orf_lookup.index),np.array(orf_lookup)]
-        mindex_tuples = list(zip(*mindex_arrays))
-        expdata_sorted.index = pd.MultiIndex.from_tuples(mindex_tuples, names=['ID','orf_name'])
-        
+    array_ids = list(expdata.columns)
 
-          
-        
+    col_mindex_arrays = [conditions,replicates, array_ids]
+    col_mindex_tuples = list(zip(*col_mindex_arrays))
+    col_mindex = pd.MultiIndex.from_tuples(col_mindex_tuples, names=['conditions', 'replicates','array_ids'])
+    expdata.columns = col_mindex
+    #sort by conditions
+    expdata_sorted = expdata.sort_index(level = 'conditions',axis = 'columns')
+    #add in index of gene names 
+    if not(list(expdata_sorted.index)==list(platform_dict.keys())):
+        print("Error: ID mismatch between experiment data and orf lookup table. Species = {}, Experiment Type = {}".format(spec, exptype))
+        return
 
+    #if no error, continue here
+    print("All ID's match between experiment data and orf lookup table. Species = {}, Experiment Type = {}".format(spec, exptype))
+
+    orf_name = [platform_dict[spot_id] for spot_id in expdata_sorted.index]
+    expdata_sorted['orf_name'] = orf_name
     
+    #Add orf_name to index
+    expdata_sorted.reset_index(inplace=True)
+    expdata_sorted.set_index(['ID_REF', 'orf_name'], inplace=True)
+    
+    #Sbay and Suva are combined on the same microarray - this splits them apart. 
+    if spec in {'Sbay', 'Suva'}: 
+        if spec =='Sbay':
+            conds_to_keep = [condition for condition in list(expdata_sorted.columns.levels[0]) if condition[0:6]!='sbayuv']
+            expdata_sorted = expdata_sorted.loc[:,conds_to_keep]
+        elif spec =='Suva': 
+            conds_to_keep = [condition for condition in list(expdata_sorted.columns.levels[0]) if condition[0:6]=='sbayuv']
+            new_cond_names = {condition: condition.split('_')[1] for condition in conds_to_keep}
+            expdata_sorted = expdata_sorted.loc[:,conds_to_keep]
+            expdata_sorted.rename(columns=new_cond_names, inplace=True)
+
     return expdata_sorted
+ 
+def make_data_tables(spec_list):
     
-def make_data_tables(species_list,fname_out_bases, base_dir):
-    
-    for jj,spec in enumerate(species_list):  
-    
-        if spec != 'Vanderwaltozyma polyspora':     #Vpol doesn't have raw expression data
+    for spec in spec_list:  
+        
+        platform_dict = make_platform_dict(spec)
+        if not(spec in {'Vpol', 'Sjap', 'Spom', 'Suva'}):     #Vpol, Sjap, Spom, and Suva don't have raw expression data
             #Generate raw expression data
-            raw_exp, orf_lookup = parse_raw_exp(spec)
-
-            #save raw expression data to a csv file
-            fname = os.path.normpath(data_processing_dir + "regev_data/raw_exp/"  + fname_out_bases[jj] + '_raw_exp.csv')
-            raw_exp.to_csv(fname)
-            print(fname + ' saved')
-        elif spec == 'Vanderwaltozyma polyspora':    #still need an orf lookup.  perhaps should do them all with these tables. 
-            array_table = pd.read_table(data_processing_dir+os.path.normpath('regev_data/Vpol_array_table.txt'), dtype = 'str')
-            orf_lookup = array_table.loc[:,['ID','ORF']].set_index('ID').squeeze()
+            raw_exp = parse_raw_exp(spec, platform_dict, save_file=True)
         
         #Generate data for microarrays
-        growth_exp = parse_micro_data(spec,'Growth',orf_lookup)
-        fname = os.path.normpath(data_processing_dir + "regev_data/GSE36253_Growth/"  + fname_out_bases[jj] + '_growth.csv' )
+        #files are saved within parse_raw_data - maybe it would be more consistent to do that in parse_micro_data as well. 
+        #print(platform_dict)
+        growth_exp = parse_micro_data(spec,'Growth',platform_dict)
+        fname = os.path.normpath(data_processing_dir + "regev_data/GSE36253_Growth/"  + spec + '_growth.csv' )
         growth_exp.to_csv(fname)
         print(fname + ' saved')
         
-        if not(spec in {'Saccharomyces bayanus','Saccharomyces mikatae','Saccharomyces paradoxus', 'Lacancea kluyverii','Debaryomyces hansenii','Vanderwaltozyma polyspora'}):
-            #There is no stress dataset for these species
-            stress_exp = parse_micro_data(species_list[jj],'Stress',orf_lookup)
-            fname = os.path.normpath(data_processing_dir + "regev_data/GSE38478_Stress/"  + fname_out_bases[jj] + '_stress.csv' )
+        if (spec in {'Scer', 'Cgla', 'Calb', 'Klac', 'Lwal', 'Ncas', 'Sjap','Spom'}):
+            #Stress data is only in these species
+            stress_exp = parse_micro_data(spec,'Stress',platform_dict)
+            fname = os.path.normpath(data_processing_dir + "regev_data/GSE38478_Stress/"  + spec + '_stress.csv' )
             stress_exp.to_csv(fname)
             print(fname + ' saved')
     
     return 
 
-def combine_growth_stress_datasets(species):
-    #species can be SCer, CGla, SCas, KLac.  No stress dataset for SBay 
-    fname = os.path.normpath(data_processing_dir + "regev_data/GSE36253_Growth/"  + species + '_growth.csv' )
+def combine_growth_stress_datasets(spec):
+    #This function takes median of replicates and combines growth and stress data into single dataframe and also saves that as a .csv. 
+    #Also takes median of spots that have the same gene ID.  Output has index which is gene names and column names for each condition. 
+
+    fname = os.path.normpath(data_processing_dir + "regev_data/GSE36253_Growth/"  + spec + '_growth.csv' )
     growth_exp = pd.read_csv(fname,header = [0,1,2], index_col = [0,1])
     print(fname + ' growth microarray dataset loaded')
 
-    #group by conditions and take mean
+    #group by conditions and take median
     growth_replicate_groups = growth_exp.groupby(axis = 1, level = 'conditions')
-    growth_exp_avg = growth_replicate_groups.aggregate(np.mean)
+    growth_exp_med = growth_replicate_groups.aggregate(np.median)
 
-    fname = os.path.normpath(data_processing_dir + "regev_data/GSE38478_Stress/"  + species + '_stress.csv' )
-    stress_exp = pd.read_csv(fname,header = [0,1,2], index_col = [0,1])
-    print(fname + ' stress microarray dataset loaded')
+    if (spec in {'Scer', 'Cgla', 'Calb', 'Klac', 'Lwal', 'Ncas', 'Sjap','Spom'}):
+        fname = os.path.normpath(data_processing_dir + "regev_data/GSE38478_Stress/"  + spec + '_stress.csv' )
+        stress_exp = pd.read_csv(fname,header = [0,1,2], index_col = [0,1])
+        print(fname + ' stress microarray dataset loaded')
 
-    #group by condition and take mean
-    stress_replicate_groups = stress_exp.groupby(axis = 1, level = 'conditions')
-    stress_exp_avg = stress_replicate_groups.aggregate(np.mean)
+        #group by condition and take median
+        stress_replicate_groups = stress_exp.groupby(axis = 1, level = 'conditions')
+        stress_exp_med = stress_replicate_groups.aggregate(np.median)
 
-    #combine growth and stress average expression datasets. 
-    if False in stress_exp_avg.index==growth_exp_avg.index:
-        print("Error: ID mismatch between condition data. Species = {}".format(species))
-    growth_stress_data = pd.concat([growth_exp_avg,stress_exp_avg], axis = 1)
+        #combine growth and stress average expression datasets. 
+        if False in stress_exp_med.index==growth_exp_med.index:
+            print("Error: ID mismatch between condition data. Species = {}".format(spec))
+        growth_stress_data = pd.concat([growth_exp_med,stress_exp_med], axis = 1)
+        
+    else: 
+        growth_stress_data = growth_exp_med
+        
+    #gets rid of ID index and takes median of any spots that represent the same gene
+    growth_stress_data_gene_ind = growth_stress_data.groupby('orf_name').median()
+    if len(growth_stress_data_gene_ind) < len(growth_stress_data) :
+        print(spec + ' has some duplicate spots')
 
-    #gets rid of ID index
-    growth_stress_data.reset_index(level=0, inplace=True)
-    fname_out = os.path.normpath(data_processing_dir + 'regev_data/' + species + '_growth_stress.csv')  
-    growth_stress_data.to_csv(fname_out)
+    fname_out = os.path.normpath(data_processing_dir + 'regev_data/' + spec + '_growth_stress.csv')  
+    growth_stress_data_gene_ind.to_csv(fname_out)
     print('combined dataset saved as ' + fname_out )
 
     return growth_stress_data
+
+def regev_ohnolog_expression_data_SSD_combine(exp_df, spec_sets, spec_conditions, combine_method = 'mean'):
+    #Takes a datframe which consists gene expression data for various conditions from
+    #Thompson et al and Roy et al listed by their relationship to pairs of S.Cer WGH 
+    #paralogs. Converts data for other duplications to single floating point numbers. 
+    #
+    #exp_df: input dataframe.  For consistent naming 
+    #
+    #spec_conditions: dictionary listing desired conditions for each species. 
+    #
+    #spec_sets: Dictionary linking name of species sets to a list of species to use.  Of the form: 
+    #
+    #spec_sets = {'Post WGH low' : [], 
+    #         'Post WGH high' : [], 
+    #         'Pre WGH' : []} 
+    #
+    # combine method:  Right now I only have mean
+    # mean: set the value to the median fold change between all duplicate orthologs. 
+    #
+    #other good options: 
+        # A: set the value to the mean fold change between all
+        # B: exclude that gene [start here]
+        # C: Pick the one that is most highly expressed in raw data
+        # D: Pick the one with highest fold change
+        # E: Pick the one with lowest fold change
+
+
+    levels = {'Post WGH low': 'low', 
+              'Post WGH high': 'high', 
+              'Pre WGH' : ''}
+
+    expression_data = {}
+
+    for row in exp_df.iterrows(): 
+
+        high_gene_common_name = row[1]['SC_common_name_high'] 
+        low_gene_common_name = row[1]['SC_common_name_low']
+        
+        expression_data_row = []
+        
+        #If there are no orthologs, set the value to np.Nan 
+        for spec_set_name, spec_set in spec_sets.items():
+            level = levels[spec_set_name]
+            if level == '': 
+                level_sep = ''
+            else: 
+                level_sep = '_'
+
+            for spec in spec_set: 
+                for condition in spec_conditions[spec]: 
+                    vals = row[1][spec + '_' + condition + level_sep + level]
+                    if isinstance(vals,list):   #if data isn't a list, it should be an np.nan
+                        Nval = sum(np.logical_not(np.isnan(vals)))
+                        if Nval > 0:  #if at least one item has a value
+                            vals_clean = [val for val in vals if not(np.isnan(val))]
+                            if combine_method == 'mean': #Change this to alter behavior for multiple orthologs
+                                val_est = np.mean(vals_clean)  
+                            expression_data_row.append(val_est)
+                        else:  #Both paralogs had no value
+                            expression_data_row.append(np.nan)
+                    else: 
+                        assert np.isnan(vals), ("Value " + str(vals) + " for " + spec + '_' + condition + ' is not a list, but not a nan')
+                        expression_data_row.append(vals)
+
+
+        expression_data[high_gene_common_name + '_' + low_gene_common_name] = expression_data_row
+
+    columns = []
+    for spec_set_name, spec_set in spec_sets.items():
+        level = levels[spec_set_name]
+        if level == '': 
+            level_sep = ''
+        else: 
+            level_sep = '_'
+        for spec in spec_set: 
+            spec_columns = [spec + '_' + condition + level_sep + level for condition in list(spec_conditions[spec])]
+            columns = columns + spec_columns
+    expression_data_df = pd.DataFrame.from_dict(expression_data, orient = 'index', columns = columns)
+
+    return expression_data_df
 
 def get_gasch_ESR_list(act_rep):
     #For a file from the Gasch 2000 supplement, read in the data
@@ -727,11 +841,11 @@ def kl_genename_convert_list(kl_genes):
     return kl_genename
     
 ## Dealing with Orthologs
-def write_YGOB_orth_lookup_table(species1, species2, base_dir, all_ortholog_file):
+def write_YGOB_orth_lookup_table(spec1, spec2, all_ortholog_file):
     #for each position in species 1
     #Assign orthologs or 'NONE' to each column from Position 2 and 3
-    fname = os.path.normpath(base_dir + all_ortholog_file)
-    orth_positions = {'Kluyveromyces lactis': [15], 'Saccharomyces cerevisiae' : [11,21]}
+    fname = os.path.normpath(data_processing_dir + all_ortholog_file)
+    orth_positions = {'Klac': [15], 'Scer' : [11,21], 'Vpol': [0,32] }
     #YGOB_Pillars.txt order of species: 
     #    0    V. polyspora Position 1
     #    1    T. phaffii Position 1
@@ -767,8 +881,8 @@ def write_YGOB_orth_lookup_table(species1, species2, base_dir, all_ortholog_file
     #    31   T. phaffii Position 2
     #    32   V. polyspora Position 2
     
-    species1_columns = orth_positions[species1]
-    species2_columns = orth_positions[species2]
+    species1_columns = orth_positions[spec1]
+    species2_columns = orth_positions[spec2]
     
     with open(fname) as f:
         orth_lookup = []
@@ -785,8 +899,7 @@ def write_YGOB_orth_lookup_table(species1, species2, base_dir, all_ortholog_file
                         species2_genes.append('NONE')
                     orth_lookup.append(species1_gene + species2_genes)
                     
-    orth_file_abbrev = {'Kluyveromyces lactis': 'Klac', 'Saccharomyces cerevisiae': 'Scer', 'Candida glabrata':'Cgla', 'Saccharomyces castellii' : 'Scas', 'Saccharomyces bayanus' : 'Sbay'}
-    orth_lookup_outputfname = os.path.normpath(base_dir + '\expression_data\ortholog_files_YGOB\\' + orth_file_abbrev[species1] + "-" + orth_file_abbrev[species2] + "-orthologs.txt"  )
+    orth_lookup_outputfname = os.path.normpath(data_processing_dir + 'ortholog_files_YGOB\\' + spec1 + "-" + spec2 + "-orthologs.txt"  )
     orth_lookup_outputfile = open(orth_lookup_outputfname, 'w')
     
     for gene in orth_lookup:
