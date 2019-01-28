@@ -195,7 +195,6 @@ def parse_raw_exp(spec, platform_dict, save_file=True):
         print(fname + ' saved')
     return raw_exp_out                    
     
-
 def parse_micro_data(spec, exptype, platform_dict): 
     #load raw data for a given species/experiment type pair.  
     #
@@ -452,6 +451,255 @@ def regev_ohnolog_expression_data_SSD_combine(exp_df, spec_sets, spec_conditions
     expression_data_df = pd.DataFrame.from_dict(expression_data, orient = 'index', columns = columns)
 
     return expression_data_df
+
+def load_regev_data_gois(ohnologs_goi, sort_column, self_spec, spec_order_post_WGH, spec_order_pre_WGH):
+    #Load data for all species for a given set of gois
+    #ohnologs_goi is indexed by YGOB ancestor, and has genename_low and genename_high for the sort_column (e.g. log2FoldChange or PKAest)
+
+    ## SMIK data often seems to be missing
+
+
+    #Makes dataframe with data for all experiments
+
+    orth_dir = data_processing_dir + 'ortholog_files' + os.sep 
+
+    columns_to_keep=[]
+    for level in ['low', 'high']:
+        for column_base in ['genename', sort_column]:
+            columns_to_keep.append(column_base + '_' + level)
+
+    ohnologs_goi_array = ohnologs_goi.loc[:,columns_to_keep]
+    ohnologs_goi_array.rename(columns = {'genename_'+level : self_spec+'_genename_'+level for level in ['low','high']}, inplace=True)
+
+    spec_conditions = {}
+
+    #adding data just for self_spec
+
+    #load data
+    fname_array_data = os.path.normpath(data_processing_dir + 'regev_data/' + self_spec + '_growth_stress_norm.csv')  
+    spec_data = pd.read_csv(fname_array_data, index_col=0)
+    conditions = spec_data.columns
+    spec_conditions[self_spec] = conditions
+
+    for level in ['low','high']:
+        condition_data_dict = {condition: [] for condition in conditions}
+        for gene in ohnologs_goi_array[self_spec + '_genename_' + level ]:
+            for condition in conditions:
+                cond_data = []
+                try: 
+                    cond_data.append(spec_data.loc[gene,condition])
+                except KeyError:
+                    cond_data.append(np.nan)
+                    print('Mismatch between goi index and expression data index ' + self_spec + ' : ' + gene + ' ' + condition)
+                condition_data_dict[condition].append(cond_data)
+
+        for condition in conditions: 
+            ohnologs_goi_array[self_spec + '_' + condition + '_' + level] = condition_data_dict[condition]
+
+
+
+    #post WGH:
+
+
+    for spec in spec_order_post_WGH: 
+
+        #load ortholog mapping
+        orth_lookup = read_orth_lookup_table(self_spec, spec, orth_dir)
+
+        #load data
+        fname_array_data = os.path.normpath(data_processing_dir + 'regev_data/' + spec + '_growth_stress_norm.csv')  
+        spec_data = pd.read_csv(fname_array_data, index_col=0)
+        conditions = spec_data.columns
+        spec_conditions[spec] = conditions
+
+        for level in ['low','high']: 
+            N_orth_list = []
+            orth_name_list = []
+            condition_data_dict = {condition: [] for condition in conditions}
+            for gene in ohnologs_goi_array[self_spec + '_genename_' + level ]:
+                try: 
+                    if orth_lookup[gene][0]=='NONE':
+                        N_orth_list.append(0)
+                        orth_name_list.append('NONE_in_orthogroups')
+                        for condition in conditions: 
+                            condition_data_dict[condition].append(np.nan)
+                        print(gene + ' has NONE listed in ortholog file for ' + spec)
+                    else: 
+                        orth_names = orth_lookup[gene]
+                        N_orth_list.append(len(orth_names))
+                        orth_name_list.append(orth_names)
+                        for condition in conditions:
+                            cond_data = []
+                            for spec_gene in orth_names: 
+                                try: 
+                                    cond_data.append(spec_data.loc[spec_gene,condition])
+                                except KeyError:
+                                    cond_data.append(np.nan)
+                                    print('Mismatch between ortholog file and expression data index ' + spec + ' : ' + spec_gene + ' ' + condition)
+                            condition_data_dict[condition].append(cond_data)
+                except KeyError:
+                    N_orth_list.append(0)
+                    orth_name_list.append('NONE_not_in_orthogroups')
+                    for condition in conditions: 
+                        condition_data_dict[condition].append(np.nan)
+                    print(gene + ' not present in orthogroup file for ' + spec)
+
+            ohnologs_goi_array[spec + '_N_' + level] = N_orth_list
+            ohnologs_goi_array[spec + '_genename_' + level] = orth_name_list
+            for condition in conditions: 
+                ohnologs_goi_array[spec + '_' + condition + '_' + level] = condition_data_dict[condition]
+
+
+
+    #pre WGH:
+
+
+    for spec in spec_order_pre_WGH: 
+
+        #load ortholog mapping
+        orth_lookup = read_orth_lookup_table(self_spec, spec, orth_dir)
+
+        #load data
+        fname_array_data = os.path.normpath(data_processing_dir + 'regev_data/' + spec + '_growth_stress_norm.csv')  
+        spec_data = pd.read_csv(fname_array_data, index_col=0)
+        conditions = spec_data.columns
+        spec_conditions[spec] = conditions
+
+        N_orth_list = []
+        orth_name_list = []
+        condition_data_dict = {condition: [] for condition in conditions}
+
+        for row in ohnologs_goi_array.loc[:,[self_spec + '_genename_low',self_spec + '_genename_high']].iterrows():
+
+            gene_low = row[1][self_spec+'_genename_low']
+            gene_high = row[1][self_spec+'_genename_high']
+
+            try:         
+                if orth_lookup[gene_low] == orth_lookup[gene_high]: 
+                    gene_to_test = gene_low
+                    if orth_lookup[gene_to_test][0]=='NONE':
+                        N_orth_list.append(0)
+                        orth_name_list.append('NONE_in_orthogroups')
+                        for condition in conditions: 
+                            condition_data_dict[condition].append(np.nan)
+                        print(gene_to_test + ' has NONE listed in ortholog file for ' + spec)
+                    else: 
+                        orth_names = orth_lookup[gene_to_test]
+                        N_orth_list.append(len(orth_names))
+                        orth_name_list.append(orth_names)
+                        for condition in conditions:
+                            cond_data = []
+                            for spec_gene in orth_names:
+                                try: 
+                                    cond_data.append(spec_data.loc[spec_gene,condition])
+                                except KeyError:
+                                    cond_data.append(np.nan)
+                                    print('Mismatch between ortholog file and expression data index ' + spec + ' : ' + spec_gene + ' ' + condition)
+                            condition_data_dict[condition].append(cond_data)
+
+                else: 
+                    raise LookupError('high and low paralogs do not have same ortholog in ' + spec + ': ' + gene_low + ' and ' + gene_high )
+            except KeyError: 
+                print('either ' + gene_low + ' or ' + gene_high + 'is not in index for ortholog table in ' + spec)    
+
+
+                gene_to_test = 'NONE'
+                if gene_low in orth_lookup.keys():
+                    print(gene_low + ' is in index for lookup table')
+                    gene_to_test = gene_low
+                elif gene_high in orth_lookup.keys():
+                    print(gene_high + ' is in index for lookup table')
+                    gene_to_test = gene_high
+
+                if gene_to_test != 'NONE':
+                    print(gene_to_test + ' did have an ortholog in ' + spec)
+                    if orth_lookup[gene_to_test][0]=='NONE':
+                        N_orth_list.append(0)
+                        orth_name_list.append('NONE_in_orthogroups')
+                        for condition in conditions: 
+                            condition_data_dict[condition].append(np.nan)
+                        print(gene_to_test + ' has NONE listed in ortholog file for ' + spec)
+                    else: 
+                        orth_names = orth_lookup[gene_to_test]
+                        N_orth_list.append(len(orth_names))
+                        orth_name_list.append(orth_names)
+                        for condition in conditions:
+                            cond_data = []
+                            for spec_gene in orth_names:
+                                try: 
+                                    cond_data.append(spec_data.loc[spec_gene,condition])
+                                except KeyError:
+                                    cond_data.append(np.nan)
+                                    print('Mismatch between ortholog file and expression data index ' + spec + ' : ' + spec_gene + ' ' + condition)
+                            condition_data_dict[condition].append(cond_data)
+                else:
+                    raise RuntimeError('Neither gene is index for ortholog table, but it was not caught in the first section')
+
+
+        ohnologs_goi_array[spec + '_N'] = N_orth_list
+        ohnologs_goi_array[spec + '_genename'] = orth_name_list
+        for condition in conditions: 
+            ohnologs_goi_array[spec + '_' + condition] = condition_data_dict[condition]
+
+
+    return ohnologs_goi_array, spec_conditions
+
+def sort_conservaton_by_col_avg(expression_data_df, spec_order, columns_to_combine, induced_thresh ):
+    #for a given expression_data_df (e.g. from load_regev_data_gois), uses conditions in columns_to_combine 
+    #for each species in spec order to sort rows by induction above a certain threshold (induced_thresh)
+    #in the species at the end of the spec_order (which is presumed to be ordered phylogenetically)
+    #Make a column which is average fold change for these columns
+    for spec in ['Scer'] + spec_order: 
+        columns_to_combine_spec = [column for column in expression_data_df.columns if 
+         (column.split('_')[0]==spec) and 
+         (column.split('_')[1] in columns_to_combine) and
+         (column.split('_')[2]=='high')]
+        expression_data_df[spec + '_PKAest_high'] = expression_data_df.loc[:,columns_to_combine_spec].apply(np.mean, axis = 1)
+        expression_data_df[spec + '_PKAestInd_high'] = (expression_data_df[spec + '_PKAest_high']>induced_thresh)
+
+    expression_data_df_sorted = expression_data_df.sort_values(by=[spec + '_PKAestInd_high' for spec in reversed(spec_order)], ascending=False)
+    return expression_data_df_sorted
+
+def sort_regev_stress_conditions(all_conds, spec_sets, expression_data_df):
+    #Sorts out conditions in a combined expression_data_df (see load_regev_data_gois) 
+    #so that all are in the order all_conds when present.  The different species sets are given by 
+    #spec sets which is a dictionary of the form: 
+    #
+    #spec_sets = {'Post WGH low' : [], 
+    #         'Post WGH high' : [], 
+    #         'Pre WGH' : []} 
+
+    levels = {'Post WGH low': 'low', 
+              'Post WGH high': 'high', 
+              'Pre WGH' : ''}
+
+    new_col_order = []
+    for spec_set_name, spec_set in spec_sets.items():
+        level = levels[spec_set_name]
+        if level == '': 
+            level_sep = ''
+        else: 
+            level_sep = '_'
+
+        for spec in spec_set:    
+
+            if level_sep == '':
+                columns_spec = [column for column in expression_data_df.columns if 
+                 (column.split('_')[0]==spec)]
+            else: 
+                columns_spec = [column for column in expression_data_df.columns if 
+                 (column.split('_')[0]==spec) and 
+                 (column.split('_')[-1]==level)]
+
+            columns_spec_sorted = []
+            for cond in all_conds: 
+                cond_spec = spec + '_' + cond + level_sep + level
+                if cond_spec in columns_spec: 
+                    columns_spec_sorted.append(cond_spec)
+
+            new_col_order = new_col_order + columns_spec_sorted
+
+    return new_col_order
 
 def get_gasch_ESR_list(act_rep):
     #For a file from the Gasch 2000 supplement, read in the data
@@ -841,11 +1089,17 @@ def kl_genename_convert_list(kl_genes):
     return kl_genename
     
 ## Dealing with Orthologs
-def write_YGOB_orth_lookup_table(spec1, spec2, all_ortholog_file):
-    #for each position in species 1
-    #Assign orthologs or 'NONE' to each column from Position 2 and 3
-    fname = os.path.normpath(data_processing_dir + all_ortholog_file)
-    orth_positions = {'Klac': [15], 'Scer' : [11,21], 'Vpol': [0,32] }
+def write_YGOB_orth_lookup_table(spec1, spec2):
+    #Makes an orhtolog lookup table for all species in the YGOB Pillars data. 
+    #spec1 the index, spec2 is the lookup.  multiple orthologs separated by tabs, NONE if there are none.  
+    #Note that this cannot lookup Small Scale Duplications after the WGH because that data is not part of the pillars 
+    #SSDs in pillars are just listed on their own - often without ancestors.  
+
+    #older version required an input file - assuming we are always using YGOB_pillars_bmh.txt
+    #older version didn't have all the cases and also returned a list instead of a dictionary
+
+    fname = os.path.normpath(data_processing_dir + "ortholog_files_YGOB/YGOB_pillars_bmh.txt")
+
     #YGOB_Pillars.txt order of species: 
     #    0    V. polyspora Position 1
     #    1    T. phaffii Position 1
@@ -880,34 +1134,202 @@ def write_YGOB_orth_lookup_table(spec1, spec2, all_ortholog_file):
     #    30   T. blattae Position 2
     #    31   T. phaffii Position 2
     #    32   V. polyspora Position 2
-    
-    species1_columns = orth_positions[spec1]
-    species2_columns = orth_positions[spec2]
-    
+
+    #position in pillars file of ancestor
+    #anc_pos = 12
+
+    #for regev lab expression data, Suva and Sbay have same gene names. 
+    orth_positions_post_WGH = {'Vpol': [0,32], 'Tpha': [1,31], 'Tbla': [2,30], 'Ndai': [3,29], 
+                      'Ncas': [4,28], 'Knag': [5,27], 'Kafr': [6,26], 'Cgla': [7,25],
+                      'Suva': [8,24], 'Sbay':[8,24], 'Skud': [9,23], 'Smik': [10,22], 'Scer' : [11,21]}
+                      
+
+    orth_positions_pre_WGH = {'Zrou':13, 'Tdel':14, 'Klac':15, 'Egos':16, 'Ecym': 17, 'Lklu':18, 'Lthe':19, 'Lwal':20}
+
+    #Case1: spec1 post WGH, spec2 pre WGH
+
+    if ((spec1 in orth_positions_post_WGH.keys()) & (spec2 in orth_positions_pre_WGH.keys())): 
+        spec1_columns = orth_positions_post_WGH[spec1]
+        spec2_column = orth_positions_pre_WGH[spec2]
+
+        with open(fname) as f:
+            orth_lookup = {}
+            for line in f:
+                linesp = line.split()
+                for spec1_column in spec1_columns: 
+                    spec1_gene = linesp[spec1_column]
+                    if spec1_gene!= '---':
+                        spec2_gene = linesp[spec2_column]
+                        if spec2_gene!='---': 
+                            orth_lookup[spec1_gene] = spec2_gene
+                        else: 
+                            orth_lookup[spec1_gene] = 'NONE'
+        
+    #Case2: spec1 pre WGH, spec2 pre WGH
+
+    if ((spec1 in orth_positions_pre_WGH.keys()) & (spec2 in orth_positions_pre_WGH.keys())): 
+        spec1_column = orth_positions_pre_WGH[spec1]
+        spec2_column = orth_positions_pre_WGH[spec2]
+
+        with open(fname) as f:
+            orth_lookup = {}
+            for line in f:
+                linesp = line.split()
+                spec1_gene = linesp[spec1_column]
+                if spec1_gene!= '---':
+                    spec2_gene = linesp[spec2_column]
+                    if spec2_gene!='---': 
+                        orth_lookup[spec1_gene] = spec2_gene
+                    else: 
+                        orth_lookup[spec1_gene] = 'NONE'
+
+        
+
+
+    #Case 3: spec1 pre WGH, spec2 post WGH
+    #In this case there will often be more than one ortholog per pre WGH gene
+
+    if ((spec1 in orth_positions_pre_WGH.keys()) & (spec2 in orth_positions_post_WGH.keys())): 
+        spec1_column = orth_positions_pre_WGH[spec1]
+        spec2_columns = orth_positions_post_WGH[spec2]
+
+        with open(fname) as f:
+            orth_lookup = {}
+            for line in f:
+                linesp = line.split()
+                spec1_gene = linesp[spec1_column]
+                if spec1_gene!= '---':
+                    spec2_genes = []
+                    for spec2_column in spec2_columns: 
+                        spec2_gene = linesp[spec2_column]
+                        if spec2_gene!='---':
+                            spec2_genes.append(spec2_gene)
+                    if len(spec2_genes)==0:
+                        orth_lookup[spec1_gene] = 'NONE'
+                    else: 
+                        orth_lookup[spec1_gene] = spec2_genes
+
+
+    #Case 4: spec1 pre WGH, spec2 pre WGH
+    #use tracks in pillars file to match up WGH genes.  If there are two paralogs, this will match tracks. 
+    #If there is one paralog, and there are two orthologs, it will list both.  
+    #If there is only one ortholog for one gene, it will list the other one regardless of track.  
+
+    if ((spec1 in orth_positions_post_WGH.keys()) & (spec2 in orth_positions_post_WGH.keys())): 
+        spec1_columns = orth_positions_post_WGH[spec1]
+        spec2_columns = orth_positions_post_WGH[spec2]
+
+        with open(fname) as f:
+            orth_lookup = {}
+            for line in f:
+                linesp = line.split()
+                spec1_genes = []
+                for spec1_column in spec1_columns: 
+                    spec1_gene = linesp[spec1_column]
+                    if spec1_gene!= '---':
+                        spec1_genes.append(spec1_gene)
+                
+                if len(spec1_genes)==2: 
+                    for jj,spec1_gene in enumerate(spec1_genes): 
+                        spec2_column = spec2_columns[jj]
+                        spec2_gene = linesp[spec2_column]
+                        if spec2_gene!='---':
+                            orth_lookup[spec1_gene] = [spec2_gene]
+                        else: 
+                            orth_lookup[spec1_gene] = ['NONE']
+                            
+                elif len(spec1_genes)==1: 
+                    spec1_gene = spec1_genes[0]
+                    spec2_genes = []
+                    for spec2_column in spec2_columns: 
+                        spec2_gene = linesp[spec2_column]
+                        if spec2_gene!='---':
+                            spec2_genes.append(spec2_gene)
+                    if len(spec2_genes)==0:
+                        orth_lookup[spec1_gene] = 'NONE'
+                    else: 
+                        orth_lookup[spec1_gene] = spec2_genes
+
+
+
+
+
+    orth_lookup_outputfname = os.path.normpath(data_processing_dir + 'ortholog_files_YGOB\\' + spec1 + "-" + spec2 + "-orthologs.txt"  )
+
+
+    with open(orth_lookup_outputfname, 'w') as fw:
+
+        for spec1_gene, spec2_genes in orth_lookup.items():
+            if isinstance(spec2_genes,str): 
+                #if this is the case spec2_genes is just one gene
+                line = spec1_gene + '\t' + spec2_genes + '\n'
+                fw.write(line)
+            if isinstance(spec2_genes,list): 
+                line = spec1_gene + '\t' + '\t'.join(spec2_genes) + '\n'
+                fw.write(line)
+                
+    return orth_lookup 
+
+def get_WGH_pairs_by_spec(spec):
+    #for a given post WGH species, return dataframe with Ancestor as key and pos1/pos2 orthologs. 
+
+    fname = os.path.normpath(data_processing_dir + "ortholog_files_YGOB/YGOB_pillars_bmh.txt")
+
+    #position in pillars file of ancestor
+    anc_pos = 12
+
+    orth_positions = {'Vpol': [0,32], 'Tpha': [1,31], 'Tbla': [2,30], 'Ndai': [3,29], 
+                      'Ncas': [4,28], 'Knag': [5,27], 'Kafr': [6,26], 'Cgla': [7,25],
+                      'Suva': [8,24], 'Skud': [9,23], 'Smik': [10,22], 'Scer' : [11,21]}
+    #YGOB_Pillars.txt order of species: 
+    #    0    V. polyspora Position 1
+    #    1    T. phaffii Position 1
+    #    2    T. blattae Position 1
+    #    3    N. dairenensis Position 1
+    #    4    N. castellii Position 1
+    #    5    K. naganishii Position 1
+    #    6    K. africana Position 1
+    #    7    C. glabrata Position 1
+    #    8    S. bayanus var. uvarum Position 1
+    #    9    S. kudriavzevii Position 1
+    #    10   S. mikatae Position 1
+    #    11   S. cerevisiae Position 1
+    #    12   Ancestral Gene Order
+    #    13   Z. rouxii
+    #    14   T. delbrueckii
+    #    15   K. lactis
+    #    16   E. gossypii 
+    #    17   E. cymbalariae
+    #    18   L. kluyveri
+    #    19   L. thermotolerans
+    #    20   L. waltii
+    #    21   S. cerevisiae Position 2
+    #    22   S. mikatae Position 2
+    #    23   S. kudriavzevii Position 2
+    #    24   S. bayanus var. uvarum Position 2
+    #    25   C. glabrata Position 2
+    #    26   K. africana Position 2
+    #    27   K. naganishii Position 2
+    #    28   N. castellii Position 2
+    #    29   N. dairenensis Position 2
+    #    30   T. blattae Position 2
+    #    31   T. phaffii Position 2
+    #    32   V. polyspora Position 2
+
+    p1_col = orth_positions[spec][0]
+    p2_col = orth_positions[spec][1]
     with open(fname) as f:
-        orth_lookup = []
+        paralog_list = []
         for line in f:
             linesp = line.split()
-            for column1 in species1_columns: 
-                if linesp[column1]!= '---':
-                    species1_gene = [linesp[column1]]
-                    species2_genes = []
-                    for column2 in species2_columns: 
-                        if linesp[column2]!='---': 
-                            species2_genes.append(linesp[column2])
-                    if len(species2_genes) == 0:
-                        species2_genes.append('NONE')
-                    orth_lookup.append(species1_gene + species2_genes)
-                    
-    orth_lookup_outputfname = os.path.normpath(data_processing_dir + 'ortholog_files_YGOB\\' + spec1 + "-" + spec2 + "-orthologs.txt"  )
-    orth_lookup_outputfile = open(orth_lookup_outputfname, 'w')
-    
-    for gene in orth_lookup:
-        line = '\t'.join(gene)+'\n'
-        orth_lookup_outputfile.write(line)
-    orth_lookup_outputfile.close()
-    
-    return orth_lookup 
+            if ((linesp[p1_col]!= '---') & (linesp[p2_col]!= '---')):
+                paralog_list.append([linesp[anc_pos],linesp[p1_col],linesp[p2_col]])
+
+    ohnologs = pd.DataFrame(paralog_list)
+    ohnologs.columns = ['anc', 'genename_gene1', 'genename_gene2']
+    ohnologs.set_index('anc', inplace=True)
+
+    return ohnologs
 
 def load_YGOB_annotations(species, base_dir, species_tab_file):
     fname = os.path.normpath(base_dir + species_tab_file)
@@ -991,6 +1413,67 @@ def get_other_paralogs_from_dataframe(genes, dataframe):
     return 
 
 def join_ohnologs_and_sort(data_to_add, ohnologs, sort_column):
+    #Adds data_to_add, a dataframe indexed on genenames to a dataframe of ohnologs
+    #from YGOB_pillars (i.e. from get_WGH_pairs_by_spec) indexed on ancestor, and with column names 
+    #genename_gene1 and genename_gene2.  
+    #sort_column is a column in data_to_add and output paralogs are sorted into low and high sets based on that 
+
+    ohnologs_expression_gene1 = pd.merge(ohnologs, data_to_add, how = 'inner', left_on = 'genename_gene1', right_index = True)
+    ohnologs_expression = pd.merge(ohnologs_expression_gene1, data_to_add, how = 'inner', left_on = 'genename_gene2', right_index = True, suffixes = ['_gene1', '_gene2'])
+
+    ## This seems important if you are not merging on the index
+    ## Drop Gene 1 and Gene 2 columns
+    #ohnologs_expression.drop(['Gene 1', 'Gene 2'], axis = 1, inplace = True)
+
+    # # Rename Gene Name 1 and Gene Name 2 columns
+    # ohnologs_expression.rename(columns = {'Gene 1' : 'sc_genename_gene1',
+    #                                       'Gene 2' : 'sc_genename_gene2',
+    #                                       'Gene Name 1':'SC_common_name_gene1',
+    #                                       'Gene Name 2':'SC_common_name_gene2'}, inplace = True)
+
+    new_columns = {}
+    for level in ['low','high']:
+        new_columns['genename_' + level] = []
+        for column_name in data_to_add.columns:
+            new_columns[column_name + '_' + level] = []
+
+    for index, row in ohnologs_expression.iterrows():
+        #Decide if gene1 or gene2 is low expression
+        if row[sort_column + '_gene1']<row[sort_column + '_gene2']:
+            low_gene = 'gene1'
+            high_gene = 'gene2'
+        elif  row[sort_column + '_gene1']>row[sort_column + '_gene2']:
+            low_gene = 'gene2'
+            high_gene = 'gene1'
+        else:
+            print('problems with {} and {}'.format(row['genename_gene1'],row['genename_gene2']))
+
+        level_dict = {'low':low_gene, 'high': high_gene}
+
+        for level, level_gene in level_dict.items():
+            new_columns['genename_' + level].append(row['genename_'+level_gene])
+            for column_name in data_to_add.columns:
+                new_columns[column_name + '_' + level].append(row[column_name + '_' + level_gene])
+
+    ohnologs_expression_sorted = ohnologs_expression.copy()
+
+    for level in ['low','high']:
+        ohnologs_expression_sorted['genename_' + level] = new_columns['genename_' + level]
+        for column_name in data_to_add.columns:
+            ohnologs_expression_sorted[column_name + '_' + level] = new_columns[column_name + '_' + level] 
+
+    columns_to_drop = []
+
+    for gene in ['gene1','gene2']:
+        columns_to_drop.append('genename_' + gene)
+        for column_name in data_to_add.columns:
+            columns_to_drop.append(column_name + '_' + gene)
+
+    ohnologs_expression_sorted.drop(columns=columns_to_drop, inplace=True)
+
+    return ohnologs_expression_sorted
+
+def join_ohnologs_and_sort_old(data_to_add, ohnologs, sort_column):
     #For a dataset with an index of sc_genename and a column to sort on (e.g. 'log2FoldChange') provides a dataframe
     #in which each row contains both ohnologs 
 
@@ -1792,8 +2275,6 @@ def exact_promoter_scan_genelist(gene_list, motif_dict, promoter_database, outpu
         output_data_frame[motif_name] = output_motif    
     
     return output_data_frame
-
-
 
 def merge_overlap_column(series_a, series_b):
     #for two string columns in an outer merge that should have identical entries except where 
