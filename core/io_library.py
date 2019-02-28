@@ -388,7 +388,7 @@ def regev_ohnolog_expression_data_SSD_combine(exp_df, spec_sets, spec_conditions
     #         'Pre WGH' : []} 
     #
     # combine method:  Right now I only have mean
-    # mean: set the value to the median fold change between all duplicate orthologs. 
+    # mean: set the value to the mean fold change between all duplicate orthologs. 
     #
     #other good options: 
         # A: set the value to the mean fold change between all
@@ -454,10 +454,10 @@ def regev_ohnolog_expression_data_SSD_combine(exp_df, spec_sets, spec_conditions
 
 def load_regev_data_gois(ohnologs_goi, sort_column, self_spec, spec_order_post_WGH, spec_order_pre_WGH):
     #Load data for all species for a given set of gois
-    #ohnologs_goi is indexed by YGOB ancestor, and has genename_low and genename_high for the sort_column (e.g. log2FoldChange or PKAest)
+    #ohnologs_goi is indexed by YGOB ancestor, and has genename_low and genename_high referring to the level 
+    #of expression in the sort_column (e.g. log2FoldChange or PKAest)
 
     ## SMIK data often seems to be missing
-
 
     #Makes dataframe with data for all experiments
 
@@ -674,7 +674,8 @@ def sort_regev_stress_conditions(all_conds, spec_sets, expression_data_df):
               'Pre WGH' : ''}
 
     new_col_order = []
-    for spec_set_name, spec_set in spec_sets.items():
+    for spec_set_name in ['Post WGH low', 'Post WGH high', 'Pre WGH']:
+        spec_set = spec_sets[spec_set_name]
         level = levels[spec_set_name]
         if level == '': 
             level_sep = ''
@@ -700,6 +701,282 @@ def sort_regev_stress_conditions(all_conds, spec_sets, expression_data_df):
             new_col_order = new_col_order + columns_spec_sorted
 
     return new_col_order
+
+def de_stress_gois(spec, columns_to_combine, goi_criteria):
+    #Gets differential expression set for a given species based on data from growth/stress microarryas from 2013 Broad study
+    #
+    #Inputs: 
+    #    spec: species of interest 4 letter abbreviation (e.g. Scer)
+    #    columns_to_combine:  Columns from growth_stress_norm.csv data that will be combined to form
+    #                         PKAest, an estimate of induction under PKA inhibition.  It will not
+    #                         Throw an error if those columns do not exist in the dataset (should probably add a warning)
+    #    goi_criteria:  dictionary of goi criteria with the following fields: 
+    #        min_high_lfc:  Minimum LFC for the high activation paralog
+    #        lfc_diff:  Difference in LFC to call a differentially expressed paralog
+    #        max_low_lfc: Maximum LFC that low activation paralog can have.  
+    #
+    #Required data:  Requires a normalized data file: <spec>_growth_stress_norm.csv
+    #
+    #Outputs: 
+    #    ohnologs_goi: dataframe whose intex in the YGOB ancestor and with 'low' and 'high' paralogs
+    #                  based on the value of PKAest.  Only contains genes that meet crietria for differential expression
+    #    ohnologs_sorted: superset of ohnologs_goi, but contains all ohnologs from a given species
+    #    
+    #
+    #Get all WGH paralogs pairs for a given species.  
+
+    ohnologs = get_WGH_pairs_by_spec(spec)
+
+    #load data
+    fname_array_data = os.path.normpath(data_processing_dir + 'regev_data/' + spec + '_growth_stress_norm.csv')  
+    spec_data = pd.read_csv(fname_array_data, index_col=0)
+    conditions = spec_data.columns
+    
+    #threshold for induction using the average of the combined columns that make up the PKA inhibition estimate.  
+    #All data is normalized already
+    
+    #Make a column which is average fold change for these columns
+    columns_to_combine_spec = [column for column in conditions if column in columns_to_combine]
+    spec_data['PKAest'] = spec_data.loc[:,columns_to_combine_spec].apply(np.mean, axis = 1)
+
+
+    #Merge in expression data for all those paralogs, sort on average/individual conditions
+    sort_column = 'PKAest'
+    
+    ohnologs_sorted = join_ohnologs_and_sort(spec_data, ohnologs, sort_column)
+
+    ohnologs_goi = ohnologs_sorted[(ohnologs_sorted[sort_column + '_high']>goi_criteria['min_high_lfc']) &
+                                          ((ohnologs_sorted[sort_column + '_high']-ohnologs_sorted[sort_column +'_low'])>goi_criteria['lfc_diff']) &
+                                          (ohnologs_sorted[sort_column + '_low'] < goi_criteria['max_low_lfc'])]
+
+    print(str(len(ohnologs_goi)) + ' differentially expressed genes identified')
+    
+    return ohnologs_goi, ohnologs_sorted, goi_criteria
+
+
+def load_tsankov_data_gois(ohnologs_goi, sort_column, seed_spec, spec_order_post_WGH, spec_order_pre_WGH):
+    #Load data for all species for a given set of gois
+    #ohnologs_goi is indexed by YGOB ancestor, and has genename_low and genename_high referring to the level 
+    #of expression in the sort_column (e.g. log2FoldChange or PKAest)
+    #The seed_spec is assumed to be a post WGH species
+    #the spec order for post WGH does not include the seed_spec
+
+    orth_dir = data_processing_dir + 'ortholog_files' + os.sep 
+
+    columns_to_keep=[]
+    for level in ['low', 'high']:
+        for column_base in ['genename', sort_column]:
+            columns_to_keep.append(column_base + '_' + level)
+
+    ohnologs_goi_array = ohnologs_goi.loc[:,columns_to_keep]
+    ohnologs_goi_array.rename(columns = {'genename_'+level : seed_spec+'_genename_'+level for level in ['low','high']}, inplace=True)
+
+    #adding data just for seed_spec
+
+    #load expression data
+    fname_array_data = data_processing_dir + os.path.normpath('regev_data/raw_exp/' + seed_spec + '_raw_exp_norm.csv')  
+    raw_exp_tsankov_norm = pd.read_csv(fname_array_data, index_col=0, header=None)
+    spec_data = raw_exp_tsankov_norm.to_dict()[1]
+
+    for level in ['low','high']: 
+        raw_exp_tsankov_norm_level = []
+        for gene in ohnologs_goi_array[seed_spec + '_genename_' + level ]: 
+            try: 
+                raw_exp_tsankov_norm_level.append([spec_data[gene]]) 
+            except KeyError:
+                print(gene + ' has no data in tsankov experiment for ' + seed_spec)
+                raw_exp_tsankov_norm_level.append('NONE_not_in_tsankov_index')
+        ohnologs_goi_array[seed_spec + '_raw_exp_tsankov_' + level] = raw_exp_tsankov_norm_level
+
+
+    for spec in spec_order_post_WGH: 
+        #load ortholog mapping
+        seed_spec_orth_lookup = read_orth_lookup_table(seed_spec, spec, orth_dir)
+
+        #Load expression data
+        fname_array_data = data_processing_dir + os.path.normpath('regev_data/raw_exp/' + spec + '_raw_exp_norm.csv')  
+        raw_exp_tsankov_norm = pd.read_csv(fname_array_data, index_col=0, header=None)
+        spec_data = raw_exp_tsankov_norm.to_dict()[1]
+
+        for level in ['low','high']: 
+            raw_exp_tsankov_norm_level = []
+            for gene in ohnologs_goi_array[seed_spec + '_genename_' + level ]: 
+                try:
+                    spec_genes = seed_spec_orth_lookup[gene]
+                except KeyError:
+                    print(gene + ' is not in orthogroup index ' + spec)
+                    raw_exp_tsankov_norm_level.append('NONE_not_in_orthogroup_index')
+                    continue
+                if spec_genes[0]=='NONE':
+                    raw_exp_tsankov_norm_level.append('NONE_no_ortholog')    
+                else: 
+                    raw_exp_list = []
+                    for spec_gene in spec_genes: 
+                        try:
+                            raw_exp_val = spec_data[spec_gene]
+                            raw_exp_list.append(raw_exp_val)
+                        except KeyError: 
+                            print(spec_gene + ' has no entry in Tsankov dataset for ' + spec + '. Ortholog of ' + gene)
+                    if raw_exp_list==[]:
+                        print('Neither of the orthologs for ' + gene + ' have an entry in Tsankov dataset')
+                        raw_exp_tsankov_norm_level.append('NONE_not_in_tsankov_index')
+                    else: 
+                        raw_exp_tsankov_norm_level.append(raw_exp_list)
+            ohnologs_goi_array[spec + '_raw_exp_tsankov_' + level] = list(raw_exp_tsankov_norm_level)
+
+
+    for spec in spec_order_pre_WGH: 
+        #load ortholog mapping
+        seed_spec_orth_lookup = read_orth_lookup_table(seed_spec, spec, orth_dir)
+
+        #Load expression data
+        fname_array_data = data_processing_dir + os.path.normpath('regev_data/raw_exp/' + spec + '_raw_exp_norm.csv')  
+        raw_exp_tsankov_norm = pd.read_csv(fname_array_data, index_col=0, header=None)
+        spec_data = raw_exp_tsankov_norm.to_dict()[1]
+
+        raw_exp_tsankov_norm_spec = []
+
+        #this is currently set up without assuming that the ortholog of post WGH species with a similar ancestor will map 
+        #to the same pre-WGH ortholog.  If the ortholog files are from pillars this is unneccessarily complex. 
+        for row in ohnologs_goi_array.loc[:,[seed_spec + '_genename_low',seed_spec + '_genename_high']].iterrows():
+            gene_low = row[1][seed_spec + '_genename_low']
+            gene_high = row[1][seed_spec + '_genename_high']
+
+            gene_to_test=None
+            try:         
+                spec_genes_low = seed_spec_orth_lookup[gene_low]
+                gene_to_test=gene_low
+            except KeyError: 
+                print('low gene' + gene_low + ' is not in orthogroup index ' + spec)
+                spec_genes_low = None
+            try: 
+                spec_genes_high = seed_spec_orth_lookup[gene_high]
+                gene_to_test=gene_high
+            except KeyError: 
+                print('high gene' + gene_high + ' is not in orthogroup index ' + spec)            
+                spec_genes_low = None
+
+            if gene_to_test==None: 
+                print('Niether high or low gene in orthogroup index ' + gene_low + ' '  + gene_high + ' for ' + spec)
+                raw_exp_tsankov_norm_spec.append('NONE_not_in_orthogroup_index')
+                continue
+
+            if spec_genes_low == spec_genes_high:   #this should only be true if both of the genes have the same set of orthologs
+                assert gene_to_test ==gene_high, 'If both genes have same orthologs gene_high will always be the gene to test'
+                assert spec_genes_low!=None, "If both genes are None, then neither should be in the orthogroup index"
+                spec_genes = seed_spec_orth_lookup[gene_to_test]
+                if spec_genes[0]=='NONE':   
+                    raw_exp_tsankov_norm_spec.append('NONE_no_ortholog')
+                else: 
+                    raw_exp_list = []
+                    for spec_gene in spec_genes: 
+                        try:
+                            raw_exp_val = spec_data[spec_gene]
+                            raw_exp_list.append(raw_exp_val)
+                        except KeyError: 
+                            print(spec_gene + ' has no entry in Tsankov dataset for ' + spec + '. Ortholog of ' + gene)
+                    if raw_exp_list==[]:
+                        print('Neither of the orthologs for ' + gene + ' have an entry in Tsankov dataset')
+                        raw_exp_tsankov_norm_spec.append('NONE_not_in_tsankov_index')
+                    else: 
+                        raw_exp_tsankov_norm_spec.append(raw_exp_list)
+            elif (spec_genes_low==None) or (spec_genes_high==None):  #Case for when one of the seed_spec genes does not have an ortholog but the other one does
+                spec_genes = seed_spec_orth_lookup[gene_to_test]
+                if spec_genes[0]=='NONE':   
+                    raw_exp_tsankov_norm_spec.append('NONE_no_ortholog')
+                else: 
+                    raw_exp_list = []
+                    for spec_gene in spec_genes: 
+                        try:
+                            raw_exp_val = spec_data[spec_gene]
+                            raw_exp_list.append(raw_exp_val)
+                        except KeyError: 
+                            print(spec_gene + ' has no entry in Tsankov dataset for ' + spec + '. Ortholog of ' + gene)
+                    if raw_exp_list==[]:
+                        print('Neither of the orthologs for ' + gene + ' have an entry in Tsankov dataset')
+                        raw_exp_tsankov_norm_spec.append('NONE_not_in_tsankov_index')
+                    else: 
+                        raw_exp_tsankov_norm_spec.append(raw_exp_list) 
+            else: 
+                raise ValueError('Orthologs of high and low paralogs of ' + gene_low + ' and ' + gene_high + ' do not match for ' + spec + '. ' + str(spec_genes_low) + str(spec_genes_high))
+
+        ohnologs_goi_array[spec + '_raw_exp_tsankov'] = raw_exp_tsankov_norm_spec
+
+    return ohnologs_goi_array
+
+def tsankov_ohnolog_expression_data_SSD_combine(exp_df, spec_sets, combine_method = 'mean'):
+    #Takes a datframe which consists of raw expression data for various conditions from
+    #Tsankov et al listed by their relationship to pairs of WGH
+    #paralogs. Converts data for other duplications to single floating point numbers. 
+    #
+    #exp_df: input dataframe.  For consistent naming 
+    #
+    #spec_sets: Dictionary linking name of species sets to a list of species to use.  Of the form: 
+    #
+    #spec_sets = {'Post WGH low' : [], 
+    #         'Post WGH high' : [], 
+    #         'Pre WGH' : []} 
+    #
+    # combine method:  Right now I only have mean
+    # mean: set the value to the mean fold change between all duplicate orthologs. 
+    #
+    #other good options: 
+        # A: set the value to the mean fold change between all
+        # B: exclude that gene [start here]
+        # C: Pick the one that is most highly expressed in raw data
+        # D: Pick the one with highest fold change
+        # E: Pick the one with lowest fold change
+
+    levels = {'Post WGH low': 'low', 
+                  'Post WGH high': 'high', 
+                  'Pre WGH' : ''}
+
+    raw_expression_data = {}
+
+    for row in exp_df.iterrows(): 
+        high_gene_common_name = row[1]['SC_common_name_high'] 
+        low_gene_common_name = row[1]['SC_common_name_low']
+
+        raw_expression_data_row = []
+
+        for spec_set_name in ['Post WGH low', 'Post WGH high', 'Pre WGH']: 
+            spec_set = spec_sets[spec_set_name]
+            level = levels[spec_set_name]
+            if level == '': 
+                level_sep = ''
+            else: 
+                level_sep = '_'
+
+            for spec in spec_set: 
+                vals = row[1][spec + '_raw_exp_tsankov' + level_sep + level]
+                if isinstance(vals,list):   #if data isn't a list, it should be an np.nan
+                    #unlike with regev data I don't include none values for raw exp if orthologs exist. 
+                    if combine_method == 'mean': #Change this to alter behavior for multiple orthologs
+                        val_est = np.mean(vals)  
+                        raw_expression_data_row.append(val_est)
+                    else:  
+                        raise ValueError('Bad Combine Method: ' + combine_method)
+                else: 
+                    assert isinstance(vals, str), ("Value " + str(vals) + " for " + spec + ' is not a list, but not a string')
+                    raw_expression_data_row.append(np.nan)
+
+        raw_expression_data[high_gene_common_name + '_' + low_gene_common_name] = raw_expression_data_row
+
+    columns = []
+    for spec_set_name in ['Post WGH low', 'Post WGH high', 'Pre WGH']: 
+        spec_set = spec_sets[spec_set_name]
+        level = levels[spec_set_name]
+        if level == '': 
+            level_sep = ''
+        else: 
+            level_sep = '_'
+        for spec in spec_set: 
+            columns.append(spec + level_sep + level)
+
+    raw_expression_data_df = pd.DataFrame.from_dict(raw_expression_data, orient = 'index', columns = columns) 
+
+
+    return raw_expression_data_df    
 
 def get_gasch_ESR_list(act_rep):
     #For a file from the Gasch 2000 supplement, read in the data
@@ -1047,6 +1324,35 @@ def SC_common_name_lookup_KL(kl_genename_list):
 
     return sc_common_name_label_list 
 
+def SC_common_name_columns_ohnologs(ohnologs_sorted, spec):
+    #Adds SC_common_name_high, low and high_low columns to a file with ohnologs from a species in YGOB
+    #Input:
+    #    ohnologs_sorted: dataframe with ohnologs sorted into low and high based on some criteria.  Need
+    #        to have columns "genename_low" and "genename_high"
+    #    spec: four letter abbreviation of species. 
+
+    if spec=='Scer': 
+        for level in ['low', 'high']:
+            ohnologs_sorted['SC_common_name_' + level] = SC_common_name_lookup(ohnologs_sorted['genename_' + level])
+    else: 
+        orth_dir = data_processing_dir + 'ortholog_files' + os.sep 
+        spec_scer_lookup = read_orth_lookup_table(spec, 'Scer', orth_dir)
+
+        for level in ['low', 'high']: 
+            SC_common_names = []
+            for spec_gene in list(ohnologs_sorted['genename_' + level]): 
+                scer_genes = spec_scer_lookup[spec_gene]
+                if scer_genes == ['NONE']:
+                    scer_genes = [spec_gene]
+                scer_common_names = SC_common_name_lookup(scer_genes)
+                #if there are two orthologs for one SC gene, they are joined with an underscore here
+                SC_common_names.append('_'.join(scer_common_names))
+            ohnologs_sorted['SC_common_name_' + level] = SC_common_names    
+    
+    ohnologs_sorted['SC_common_name_high_low']=ohnologs_sorted['SC_common_name_high'] + '_' + ohnologs_sorted['SC_common_name_low']
+    
+    return ohnologs_sorted
+
 def SC_orf_lookup_by_name(name_list):
     #Input is a list of common names, output is a list of orfs
     #would be nice if this worked with a single string as well as a list 
@@ -1098,7 +1404,7 @@ def write_YGOB_orth_lookup_table(spec1, spec2):
     #older version required an input file - assuming we are always using YGOB_pillars_bmh.txt
     #older version didn't have all the cases and also returned a list instead of a dictionary
 
-    fname = os.path.normpath(data_processing_dir + "ortholog_files_YGOB/YGOB_pillars_bmh.txt")
+    fname = os.path.normpath(data_processing_dir + "ortholog_files_YGOB/YGOB_Pillars_bmh.txt")
 
     #YGOB_Pillars.txt order of species: 
     #    0    V. polyspora Position 1
@@ -1254,9 +1560,9 @@ def write_YGOB_orth_lookup_table(spec1, spec2):
 
 
 
-    orth_lookup_outputfname = os.path.normpath(data_processing_dir + 'ortholog_files_YGOB\\' + spec1 + "-" + spec2 + "-orthologs.txt"  )
+    orth_lookup_outputfname = os.path.normpath(data_processing_dir + 'ortholog_files_YGOB/' + spec1 + "-" + spec2 + "-orthologs.txt"  )
 
-
+    print(orth_lookup_outputfname)
     with open(orth_lookup_outputfname, 'w') as fw:
 
         for spec1_gene, spec2_genes in orth_lookup.items():
@@ -1273,7 +1579,7 @@ def write_YGOB_orth_lookup_table(spec1, spec2):
 def get_WGH_pairs_by_spec(spec):
     #for a given post WGH species, return dataframe with Ancestor as key and pos1/pos2 orthologs. 
 
-    fname = os.path.normpath(data_processing_dir + "ortholog_files_YGOB/YGOB_pillars_bmh.txt")
+    fname = os.path.normpath(data_processing_dir + "ortholog_files_YGOB/YGOB_Pillars_bmh.txt")
 
     #position in pillars file of ancestor
     anc_pos = 12
@@ -1851,6 +2157,184 @@ def extract_promoter_sequence(gene, prom_length):
         
     return spec, promoter_output
 
+
+def ygob_promoter_extract(spec, L_prom): 
+    #extracts promoters from a YGOB genome.tab file and deposits them 
+    #in a file.  Also deposits short promoters in a file.  
+    #only works on gpucluster right now because that's where the genomes are
+    
+    ygob_genome_dir = "/home/heineike/genomes/YGOB/"
+
+    ygob_fname_spec = ygob_genome_dir + spec + '_genome.tab'
+
+    features = pd.read_table(ygob_fname_spec, index_col=0, header=None)
+
+    features.columns = ['strand', 'start', 'end', 'ygob on/off', 'chrm', 'short_name', 'coords', 'notes']
+    #  - NAME - unambiguous name used to identify the gene
+    #  - ORIENTATION - 0 = Crick Strand, 1 = Watson Strand
+    #  - START COORDINATE - 5' start of the co-ordinate range of the feature
+    #  - STOP COORDINATE - 3' end of the co-ordinate range of the feature.  I call it 'end' to match typical GTFs
+    #  - ON/OFF - whether feature is displayed or not in YGOB
+    #  - CHROMOSOME/CONTIG/SCAFFOLD NUMBER - identifying number of source sequence
+    #  - SHORT NAME - the shorter name that will appear in the gene box on screen in YGOB
+    #  - COORDINATES - complete gene co-ordinates with intron/exon annotation and complement tag if appropriate
+    #  - NOTES - Gen
+
+    genome_fname = ygob_genome_dir + spec + '_sequence.fsa'
+
+    #given a features file, extract the promoters for all the genes: 
+    #would be easy to extend to extracting for a subset of genes, but might be better to do that from the 
+    #all promoter file anyway
+
+    #genes = ['NCAS0A00120', 'NCAS0A00150', 'NCAS0J02180']
+
+    #probably should separate out genes by chromosome
+
+    #get list of chromosomes
+    chrm_list = list(SeqIO.index(genome_fname, "fasta"))
+
+    #make dict of chromosome name in genome file to chromosome name in features table 
+    chrm_dict = {chrm: int(chrm.split('_')[-1]) for chrm in chrm_list}
+
+    strand_dict = {0:'-', 1:'+'}
+
+    seq_records = SeqIO.parse(genome_fname, "fasta")
+
+    promoter_dir = data_processing_dir + os.path.normpath('promoter_phylogeny/promoter_sets/' + spec)
+    #os.mkdir(promoter_dir)
+    promoters_fname = os.path.normpath(promoter_dir + '/all_promoters_' + str(L_prom) + '.fasta')
+
+    with open(promoters_fname, 'w') as f: 
+
+        short_promoters = {}
+        for chrm_seq in seq_records:
+            chrm = chrm_seq.id
+            chrm_features = chrm_dict[chrm]
+
+            features_chrm = features[features['chrm']==chrm_features]
+            #genes_chrm = list(set(genes) & set(features_chrm.index))
+
+            #for each gene, extract promoter sequence
+            for feature in features_chrm.iterrows():
+                gene = feature[0]
+                strand = strand_dict[feature[1].strand]
+                start = feature[1].start
+                end = feature[1].end
+                #Adjust coordinates to get L_prom "promoter" sequences
+                if strand == '-': 
+                    prom_end = end
+                    prom_start = prom_end + L_prom   #should do min of this and the total length of the scaffold, 
+                elif strand == '+': 
+                    prom_end = start - 1
+                    prom_start = max(0,prom_end - L_prom)
+
+
+                L_scaffold = len(chrm_seq)
+
+                if strand == '-': 
+                    if prom_start > L_scaffold: 
+                        print('promoter region extends past the scaffold, spec = ' + spec + 'Gene = ' + gene + ', L_prom = ' + str(L_prom))
+                        prom_start = L_scaffold
+                    if prom_end > L_scaffold: 
+                        print('scaffold ends at the end of the gene, spec = ' + spec + ' Gene = ' + gene)
+                        prom_end = L_scaffold
+
+                    promoter = chrm_seq.seq[prom_end:prom_start].reverse_complement()
+                elif strand == '+': 
+                    promoter = chrm_seq.seq[prom_start:prom_end]
+
+                if abs(prom_end-prom_start)<L_prom:
+                    short_promoters[gene] = abs(prom_end-prom_start)
+
+                #do not add promoter if it has L=0 
+                if abs(prom_end-prom_start)>0: 
+                    f.write('>' + gene + ' scaffold=' + chrm + " strand=" + strand + " start=" + str(prom_start) + ' end=' + str(prom_end) +  ' L=' + str(abs(prom_end-prom_start)) + '\n')
+                    f.write(str(promoter.upper()) + '\n')  #I wonder why some of the bases were in lower case
+
+    
+    print('All promoters for ' + spec + ' saved in ' + promoters_fname)
+    short_promoters_fname = os.path.normpath(promoter_dir + '/short_promoters.fasta')
+    with open(short_promoters_fname,'w') as f: 
+        for gene, L_short_prom in short_promoters.items(): 
+            f.write(gene + '\t' + str(L_short_prom) + '\n')     
+    
+    print('short promoters saved in ' + short_promoters_fname)
+
+    return 
+
+
+def ygob_AA_extract(spec):
+    #Makes fasta file of AA sequences for YGOB species
+    print(spec)
+    
+    ygob_genome_dir = "/home/heineike/genomes/YGOB/"
+
+    ygob_fname_spec = ygob_genome_dir + spec + '_genome.tab'
+
+    features = pd.read_table(ygob_fname_spec, index_col=0, header=None)
+
+    features.columns = ['strand', 'start', 'end', 'ygob on/off', 'chrm', 'short_name', 'coords', 'notes']
+    #  - NAME - unambiguous name used to identify the gene
+    #  - ORIENTATION - 0 = Crick Strand, 1 = Watson Strand
+    #  - START COORDINATE - 5' start of the co-ordinate range of the feature
+    #  - STOP COORDINATE - 3' end of the co-ordinate range of the feature.  I call it 'end' to match typical GTFs
+    #  - ON/OFF - whether feature is displayed or not in YGOB
+    #  - CHROMOSOME/CONTIG/SCAFFOLD NUMBER - identifying number of source sequence
+    #  - SHORT NAME - the shorter name that will appear in the gene box on screen in YGOB
+    #  - COORDINATES - complete gene co-ordinates with intron/exon annotation and complement tag if appropriate
+    #  - NOTES - Gen
+
+    genome_fname = ygob_genome_dir + spec + '_sequence.fsa'
+
+    #get list of chromosomes
+    chrm_list = list(SeqIO.index(genome_fname, "fasta"))
+
+    #make dict of chromosome name in genome file to chromosome name in features table 
+    chrm_dict = {chrm: int(chrm.split('_')[-1]) for chrm in chrm_list}
+
+    strand_dict = {0:'-', 1:'+'}
+
+    seq_records = SeqIO.parse(genome_fname, "fasta")
+
+    AA_dir = data_processing_dir + os.path.normpath('ortholog_files_YGOB/AA_lists/')
+    # #os.mkdir(promoter_dir)
+    AA_fname = AA_dir + os.sep + os.path.normpath(spec + '_AA_list.fasta')
+
+    with open(AA_fname, 'w') as f: 
+
+        for chrm_seq in seq_records:
+            chrm = chrm_seq.id
+            print('scaffold: ' + chrm)
+            chrm_features = chrm_dict[chrm]
+
+            features_chrm = features[features['chrm']==chrm_features]
+            
+            #genes_chrm = list(set(genes) & set(features_chrm.index))
+
+            #for each gene, extract AA sequence
+            for feature in features_chrm.iterrows():
+                gene = feature[0]
+                strand = strand_dict[feature[1].strand]
+                start = feature[1].start
+                end = feature[1].end
+
+                if strand == '-': 
+                    CDS = chrm_seq.seq[start-1:end].reverse_complement()
+
+                elif strand == '+': 
+                    CDS = chrm_seq.seq[start-1:end]
+
+                AA_seq = str(CDS.translate())
+
+                f.write('>' + gene + ' scaffold=' + chrm + " strand=" + strand + " start=" + str(start) + ' end=' + str(end) + '\n')
+                f.write(AA_seq + '\n')  #I wonder why some of the bases were in lower case
+
+
+    print('All AA seqs for ' + spec + ' saved in ' + AA_fname)
+
+    return
+
+   
 def write_promoter_file(promoter_database, gene_list,fname):
     #Changed name from write_ame_promoter_file to write_promoter_file 10JAN18    
     with open(fname,'w') as f: 
@@ -2116,7 +2600,9 @@ def exact_promoter_scan(motif, prom_seq, output_format='count', sequence_context
     # now that can be done with exact_promoter_scan_genelist or exact_promoter_scan_from_fasta
     #
     # For some reason I had str(prom_seq) rather than str(prom_seq.seq) until 121718
-
+    #
+    ## output of full changed to be an empty list if there are no hits.  Before it was None. 
+    
     L_motif = len(motif)
 
     #fwd search
@@ -2147,11 +2633,13 @@ def exact_promoter_scan(motif, prom_seq, output_format='count', sequence_context
             hitseq = prom_seq_rev[(L_prom-motif_site-L_motif-sequence_context):(L_prom-motif_site+sequence_context)]
             hitdir = 'rev'
             loc_hitseq_gene.append((loc,hitdir,hitseq))
-
-        if len(loc_hitseq_gene)==0: 
-            output = None
-        else:
-            output = loc_hitseq_gene
+        
+        output = loc_hitseq_gene
+        
+#         if len(loc_hitseq_gene)==0: 
+#             output = None
+#         else:
+#             output = loc_hitseq_gene
     else: 
         print("choose output_format: 'count' or 'full' ")
         
@@ -2202,10 +2690,7 @@ def exact_promoter_scan_from_fasta(promoters_fname, motif_dict, output_format = 
             elif output_format=='full': 
                 prom_hits = exact_promoter_scan(motif, seq_cropped, output_format=output_format, sequence_context = sequence_context)
                 #add output in the order of columns
-                if prom_hits == None: 
-                    counts = 0
-                else: 
-                    counts = len(prom_hits)
+                counts = len(prom_hits)
                 output_row.append(counts)     #append count
                 output_row.append(prom_hits)  #append full_features
 
@@ -2275,6 +2760,158 @@ def exact_promoter_scan_genelist(gene_list, motif_dict, promoter_database, outpu
         output_data_frame[motif_name] = output_motif    
     
     return output_data_frame
+
+def motif_scan_YGOB_specs(ohnologs_goi, seed_spec, spec_order_pre_WGH, spec_order_post_WGH, motif_dict, L_prom=700,output_format='full', sequence_context=2 ):
+    #searches for STRE within a set of ohnologs
+    #
+    #inputs:
+    #    ohnologs_goi:  Dataframe of ohnologs that we want to search
+    #    seed_spec:     Species which defined the ohnologs_goi set.  this species genename should be in genename_low/high columns
+    #    spec_order_pre/post_WGH: list of pre/post_WGH species (four letter abbrev) that we want to search
+    #    motif_dict: dictionary of motifs to search
+    #    L_prom, output_format, sequence_context:  motif search paramters we pass
+    #
+    #outputs: 
+    #    ohnologs_goi:  Adds columns with counts and results for motif searches for each included species
+    #    motif_calc:  returns dictionary with pvalues and counts for presence of motif for each input motif
+    #
+    #A file of promoters for the set of gois is also saved during the routine in the promoter_dir
+
+    spec_sets = {'Post WGH low' : spec_order_post_WGH, 
+                 'Post WGH high' : spec_order_post_WGH, 
+                 'Pre WGH' : spec_order_pre_WGH} 
+
+    levels = {'Post WGH low': 'low', 
+              'Post WGH high': 'high', 
+              'Pre WGH' : ''}
+
+    sc_kl_abbrev_lookup = {'Scer': 'sc', 'Klac': 'kl'}
+
+    motif_calcs = {}  #already set up in S.Cer/K.Lac routine above
+    for spec_set_name, spec_set in spec_sets.items():
+        print(spec_set_name)
+        level = levels[spec_set_name]
+        if level == '': 
+            level_sep = ''
+        else: 
+            level_sep = '_'
+        motif_calcs[spec_set_name] = {}  #already set up in S.Cer/K.Lac routine above
+        for spec in spec_set:
+            print(spec)
+            if spec in {'Klac', 'Scer'}:
+                promoter_dir = data_processing_dir + os.path.normpath(sc_kl_abbrev_lookup[spec] + '_promoters/promoter_sets')
+                all_promoters_fname = os.path.normpath(promoter_dir + '/all_' + sc_kl_abbrev_lookup[spec] + '_promoters.fasta')
+            else: 
+                promoter_dir = data_processing_dir + os.path.normpath('promoter_phylogeny/promoter_sets/' + spec)
+                all_promoters_fname = os.path.normpath(promoter_dir + '/all_promoters_' + str(L_prom) + '.fasta')
+            all_promoters = SeqIO.to_dict(SeqIO.parse(all_promoters_fname, "fasta"))  
+
+            #scan all promoters for motifs
+            all_promoters_scan = exact_promoter_scan_from_fasta(all_promoters_fname, 
+                                                      motif_dict, 
+                                                      output_format = 'full', 
+                                                      sequence_context = 2, 
+                                                      L_prom = None)
+            motif_calcs_spec = {}
+            motif_calcs_spec['all'] = {'total':len(all_promoters_scan)}
+            for motif_name in motif_dict.keys():
+                motif_calcs_spec['all'][motif_name]={'hits': sum(all_promoters_scan[motif_name + '_count']>0)}
+                motif_calcs_spec['all'][motif_name]['pct'] = (motif_calcs_spec['all'][motif_name]['hits'])/(motif_calcs_spec['all']['total'])
+
+            #     print('N ' + motif_name + ' in promoters of ' + spec + ' : ' + str(N_all_hits))
+            #     print('N total promoters for ' + spec + ' : ' + str(N_all_total))
+
+            genes = []
+
+
+            #for each level, scan for motifs and add a column to the ohnologs_goi dataset.  Also saves a
+            #promoter set file for gois, and outputs enrichment calculations
+
+            if spec == seed_spec: 
+                genes = ohnologs_goi['genename' + level_sep + level]
+            elif spec_set_name == 'Pre WGH' :
+                #Get goi orthologs for this species
+                #load ortholog mapping
+                orth_lookup = read_orth_lookup_table(seed_spec, spec, data_processing_dir + os.sep + "ortholog_files_YGOB" + os.sep)
+
+                #for pre_wgh species checks to see if ortholog matches
+                for row in ohnologs_goi.loc[:,['genename_low','genename_high']].iterrows(): 
+                    orth_low = orth_lookup[row[1].genename_low][0]
+                    orth_high = orth_lookup[row[1].genename_high][0]
+                    if ((len(orth_lookup[row[1].genename_low])==2)|(len(orth_lookup[row[1].genename_low])==2)):
+                        raise ValueError('more than one ortholog for a given ' + seed_spec + ' gene :' + row[1].genename_low + ' -> ' + orth_lookup[row[1].genename_low] +
+                                         ', ' + row[1].genename_high + ' -> ' + orth_lookup[row[1].genename_low])
+                    if orth_low != orth_high:
+                        raise ValueError('Orthologs of WGH paralogs do not match : ' + row[1].genename_low + ' -> ' + orth_low +
+                                         ', ' + row[1].genename_high + ' -> ' + orth_high) # + '. Used high ortholog')
+                        #genes.append(orth_high)
+                    else:
+                        genes.append(orth_high)
+            else: 
+                #Get goi orthologs for this species
+                #load ortholog mapping
+                orth_lookup = read_orth_lookup_table(seed_spec, spec, data_processing_dir + os.sep + "ortholog_files_YGOB" + os.sep)
+
+                for seed_gene in ohnologs_goi['genename' + level_sep + level]:
+                    gene = orth_lookup[seed_gene]
+                    if len(gene)==2:
+                        print(gene + ' has more than one ortholog for ' + seed_gene)
+                    genes.append(gene[0])
+
+            ohnologs_goi[spec + '_genename' + level_sep + level] = genes
+
+            goi_promoters_fname = promoter_dir + os.sep + 'depka_' + seed_spec + level_sep + level + '_' + str(L_prom) + '.fasta'
+
+            seqs = []
+            motif_scan_results = {motif_name:[] for motif_name in motif_dict.keys()}
+            motif_scan_counts = {motif_name:[] for motif_name in motif_dict.keys()}
+            for gene in genes:
+                if gene != 'NONE':
+                    try: 
+                        seq = all_promoters[gene]
+                        seqs.append(seq)
+                        for motif_name, motif in motif_dict.items():
+                            motif_scan_result = exact_promoter_scan(motif, seq, output_format=output_format, sequence_context=2)
+                            motif_scan_results[motif_name].append(motif_scan_result)
+                            motif_scan_counts[motif_name].append(len(motif_scan_result))
+                    except KeyError:
+                        print(gene + ' not present in promoter dict for ' + spec)
+                        for motif_name, motif in motif_dict.items():
+                            motif_scan_results[motif_name].append('NONE')
+                            motif_scan_counts[motif_name].append(np.nan)
+                else:
+                    for motif_name, motif in motif_dict.items():
+                        motif_scan_results[motif_name].append('NONE')
+                        motif_scan_counts[motif_name].append(np.nan)
+
+            #outputs a filename for a given promoter set
+            with open(goi_promoters_fname, 'w') as f: 
+                SeqIO.write(seqs, f, 'fasta')
+
+
+            #Add column to dataframe and make enrichment calculations. 
+            orthologs_present = [gene for gene in genes if gene!='NONE']
+            motif_calcs_spec['goi'] = {'total': len(orthologs_present)}
+            N2_total = motif_calcs_spec['all']['total'] - motif_calcs_spec['goi']['total']
+            for motif_name in motif_dict.keys(): 
+                ohnologs_goi[spec + '_' + motif_name + '_count' + level_sep + level] = motif_scan_counts[motif_name]
+                ohnologs_goi[spec + '_' + motif_name + '_result'+ level_sep + level] = motif_scan_results[motif_name]
+
+                motif_gt0 = [n_motif for n_motif in motif_scan_counts[motif_name] if ((not(np.isnan(n_motif))) & (n_motif>0))]
+                motif_calcs_spec['goi'][motif_name] = {'hits':len(motif_gt0)}
+                motif_calcs_spec['goi'][motif_name]['pct'] = (motif_calcs_spec['goi'][motif_name]['hits'])/(motif_calcs_spec['goi']['total'])
+                N2_hits = motif_calcs_spec['all'][motif_name]['hits'] - motif_calcs_spec['goi'][motif_name]['hits']
+
+                oddsratio, pvalue = stats.fisher_exact([
+                                                        [motif_calcs_spec['goi'][motif_name]['hits'], N2_hits],
+                                                        [motif_calcs_spec['goi']['total'], N2_total]
+                                                       ], 
+                                                       alternative = 'two-sided')        
+                motif_calcs_spec['goi'][motif_name]['pval'] = pvalue
+
+            motif_calcs[spec_set_name][spec] = motif_calcs_spec
+
+    return ohnologs_goi, motif_calcs
 
 def merge_overlap_column(series_a, series_b):
     #for two string columns in an outer merge that should have identical entries except where 
