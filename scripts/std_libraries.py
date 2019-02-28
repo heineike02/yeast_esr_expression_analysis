@@ -46,6 +46,7 @@ import matplotlib.pyplot as plt
 # from Bio import SeqFeature as sf
 # from Bio.Alphabet import generic_dna
 # from Bio.Seq import Seq
+# import gffutils
 
 # import re
 
