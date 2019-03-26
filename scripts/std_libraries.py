@@ -60,6 +60,7 @@ if online_input == "Yes":
     import plotly.plotly as py
     import plotly.graph_objs as pygo
     import plotly.tools as pytools
+    import plotly.io as pio
     py.sign_in('heineike02_student','9dMTMZgJMgUP0YX0P5mQ')
     #py.sign_in('heineike02', 'APPjKrtARaN2ZgUYIkqr')
     
