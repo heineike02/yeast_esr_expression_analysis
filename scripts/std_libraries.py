@@ -14,16 +14,12 @@ if sys.path[-1] != base_dir:
 
 import os
 
-print("I am about to import a library")
+print("Importing expression plots and io_library and setting base_dir and data_processing_dir")
 from core import expression_plots 
 from core import io_library 
-%load_ext autoreload
-%autoreload 2
-# %matplotlib 
-# plt.ioff()
-#%matplotlib inline
-%matplotlib notebook
+io_library.base_dir = base_dir
 data_processing_dir = base_dir + os.sep + os.path.normpath("expression_data") + os.sep
+io_library.data_processing_dir = data_processing_dir
 
 import pandas as pd
 import numpy as np
@@ -33,7 +29,7 @@ import matplotlib.pyplot as plt
 #for my windows10 laptop I had to install this package using pip rather than anaconda.  
 #import seaborn as sns; sns.set(style="ticks", color_codes=True)
 #from sklearn import linear_model
-#import pickle
+import pickle
 #import subprocess
 #import networkx as nx
 #import scipy.stats as stats
@@ -78,9 +74,3 @@ if online_input == "Yes":
 #import requests
 #from lxml import etree    #parses xml output
 
-spec_lookup = {'Klac' : 'Kluyveromyces lactis', 'Scer': 'Saccharomyces cerevisiae', 
- 'Cgla' : 'Candida glabrata' , 'Ncas': 'Naumovozyma castellii', 
- 'Sbay' : 'Saccharomyces bayanus', 'Smik': 'Saccharomyces mikatae',
- 'Lwal' : 'Lachancea waltii', 'Spar' : 'Saccharomyces paradoxus', 
- 'Lklu' : 'Lachancea kluyverii', 'Dhan': 'Debaryomyces hansenii', 
- 'Calb' : 'Candida albicans', 'Ylip': 'Yarrowia lipolytica'}

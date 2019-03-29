@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 #from IPython.core.debugger import Tracer
+print('Importing io_library.  If autoreload, may need to reset base_dir and data_processing dir \n  io_library.base_dir=base_dir \n io_library.data_processing_dir = data_processing_dir')
 import os 
 import pandas as pd
 import numpy as np
@@ -9,7 +10,6 @@ import scipy.stats as stats
 import scipy.spatial.distance as spd
 from collections import Counter
 import subprocess
-print('I am importing io_library')
 import matplotlib.pyplot as plt
 from Bio.Seq import Seq
 from Bio.Alphabet import generic_dna
@@ -25,13 +25,11 @@ from lxml import etree    #parses xml output
 from itertools import product
 import pickle
 
-#Indicate operating environment and import core modules
-location_input = input("what computer are you on? a = Ben's laptop, b = gpucluster, c = Ben's desktop, d = other")
-location_dict = {'a': "C:\\Users\\BMH_work\\github\\expression_broad_data", 'b': "/home/heineike/github/expression_broad_data",
-                 'c': "C:\\Users\\Ben\\Documents\\GitHub\\expression_broad_data", 'd':'you need to add your location to the location_dict'}
-base_dir = location_dict[location_input]
-print("base directory is " + base_dir)
-data_processing_dir = base_dir + os.sep + os.path.normpath("expression_data") + os.sep
+base_dir = ''
+data_processing_dir = ''
+#These need to be set after importing the module based on file structure 
+#set in std_libraries.py
+#I could probably do it automatically with relative paths. 
 
 spec_lookup = {'Klac' : 'Kluyveromyces lactis', 'Scer': 'Saccharomyces cerevisiae', 
  'Cgla' : 'Candida glabrata' , 'Ncas': 'Naumovozyma castellii', 
@@ -41,16 +39,16 @@ spec_lookup = {'Klac' : 'Kluyveromyces lactis', 'Scer': 'Saccharomyces cerevisia
  'Calb' : 'Candida albicans', 'Ylip': 'Yarrowia lipolytica', 
  'Sjap' : 'Schizosaccharomyces japonicus' , 'Spom' : 'Schizosaccharomyces pombe' }
 
-print("data processing dir is " + data_processing_dir )
 
 ## External Data
 ###SGD Data
+
 def read_SGD_features():
     
     #Read in orf/name file and make it a dictionary
     # Gabe 7/12/16
     # SC_features_fname = os.path.normpath(data_processing_dir + "\ortholog_files\\SGD_features.tab")
-    SC_features_fname = os.path.normpath(data_processing_dir + "/ortholog_files/SGD_features.tab")
+    SC_features_fname = os.path.normpath(data_processing_dir + "/ortholog_files_regev/SGD_features.tab")
 
     SC_features = pd.read_csv(SC_features_fname, sep = '\t', header=None)
     SC_orfs = SC_features.groupby(1).get_group('ORF')
@@ -461,7 +459,8 @@ def load_regev_data_gois(ohnologs_goi, sort_column, self_spec, spec_order_post_W
 
     #Makes dataframe with data for all experiments
 
-    orth_dir = data_processing_dir + 'ortholog_files' + os.sep 
+    #Must use ortholog mapping for regev data. 
+    orth_dir = data_processing_dir + 'ortholog_files_regev' + os.sep 
 
     columns_to_keep=[]
     for level in ['low', 'high']:
@@ -726,7 +725,35 @@ def de_stress_gois(spec, columns_to_combine, goi_criteria):
     #Get all WGH paralogs pairs for a given species.  
 
     ohnologs = get_WGH_pairs_by_spec(spec)
+    
+    #For species that have different names in YGOB (for ohnolog names) than in expression data (regev names), 
+    #makes genename_gene1 and genename_gene2 the ohnolog name
+    if spec in {'Ncas'}: 
+        print('Species is ' + spec + ', translating gene names from YGOB to regev')
+        
+        orth_dir_regev = data_processing_dir + "ortholog_files_regev" + os.sep
 
+        YGOB_regev = read_orth_lookup_table(spec + '_YGOB',spec + '_regev', orth_dir_regev)
+
+        ohnologs.rename(columns={'genename_gene1':'genename_YGOB_gene1', 'genename_gene2': 'genename_YGOB_gene2'}, inplace=True)
+
+        for geneN in ['gene1', 'gene2']: 
+            genename_regev_list = []
+            for genename_YGOB in ohnologs['genename_YGOB_' + geneN]:
+                genenames_regev = YGOB_regev[genename_YGOB]
+                if len(genenames_regev)==1:
+                    if genenames_regev[0]=='NONE':
+                        print(genename_YGOB + ' has no match in regev dataset')
+                    genename_regev_list.append(genenames_regev[0])
+                else: 
+                    print(genename_YGOB + ' has multiple matches in regev dataset: ')
+                    print(genenames_regev)
+                    genename_regev_list.append('MULTIPLE')
+
+            ohnologs['genename_' + geneN] = genename_regev_list
+
+    
+    
     #load data
     fname_array_data = os.path.normpath(data_processing_dir + 'regev_data/' + spec + '_growth_stress_norm.csv')  
     spec_data = pd.read_csv(fname_array_data, index_col=0)
@@ -761,7 +788,7 @@ def load_tsankov_data_gois(ohnologs_goi, sort_column, seed_spec, spec_order_post
     #The seed_spec is assumed to be a post WGH species
     #the spec order for post WGH does not include the seed_spec
 
-    orth_dir = data_processing_dir + 'ortholog_files' + os.sep 
+    orth_dir = data_processing_dir + 'ortholog_files_regev' + os.sep 
 
     columns_to_keep=[]
     for level in ['low', 'high']:
@@ -1324,7 +1351,7 @@ def SC_common_name_lookup_KL(kl_genename_list):
 
     return sc_common_name_label_list 
 
-def SC_common_name_columns_ohnologs(ohnologs_sorted, spec):
+def SC_common_name_columns_ohnologs(ohnologs_sorted, spec, orth_dir):
     #Adds SC_common_name_high, low and high_low columns to a file with ohnologs from a species in YGOB
     #Input:
     #    ohnologs_sorted: dataframe with ohnologs sorted into low and high based on some criteria.  Need
@@ -1335,7 +1362,6 @@ def SC_common_name_columns_ohnologs(ohnologs_sorted, spec):
         for level in ['low', 'high']:
             ohnologs_sorted['SC_common_name_' + level] = SC_common_name_lookup(ohnologs_sorted['genename_' + level])
     else: 
-        orth_dir = data_processing_dir + 'ortholog_files' + os.sep 
         spec_scer_lookup = read_orth_lookup_table(spec, 'Scer', orth_dir)
 
         for level in ['low', 'high']: 
@@ -1563,17 +1589,8 @@ def write_YGOB_orth_lookup_table(spec1, spec2):
     orth_lookup_outputfname = os.path.normpath(data_processing_dir + 'ortholog_files_YGOB/' + spec1 + "-" + spec2 + "-orthologs.txt"  )
 
     print(orth_lookup_outputfname)
-    with open(orth_lookup_outputfname, 'w') as fw:
-
-        for spec1_gene, spec2_genes in orth_lookup.items():
-            if isinstance(spec2_genes,str): 
-                #if this is the case spec2_genes is just one gene
-                line = spec1_gene + '\t' + spec2_genes + '\n'
-                fw.write(line)
-            if isinstance(spec2_genes,list): 
-                line = spec1_gene + '\t' + '\t'.join(spec2_genes) + '\n'
-                fw.write(line)
-                
+    print_ortholog_file(orth_lookup_outputfname, orth_lookup)
+                    
     return orth_lookup 
 
 def get_WGH_pairs_by_spec(spec):
@@ -1637,7 +1654,8 @@ def get_WGH_pairs_by_spec(spec):
 
     return ohnologs
 
-def load_YGOB_annotations(species, base_dir, species_tab_file):
+def load_YGOB_annotations(species, species_tab_file):
+    #previously base_dir was the middle input
     fname = os.path.normpath(base_dir + species_tab_file)
     
     with open(fname) as f:
@@ -1840,6 +1858,19 @@ def join_ohnologs_and_sort_old(data_to_add, ohnologs, sort_column):
 
     ohnologs_expression_sorted.drop(columns=columns_to_drop, inplace=True)
     return ohnologs_expression_sorted
+
+def print_ortholog_file(orth_lookup_outputfname, orth_lookup):
+    with open(orth_lookup_outputfname, 'w') as fw:
+        for spec1_gene, spec2_genes in orth_lookup.items():
+            if isinstance(spec2_genes,str): 
+                #if this is the case spec2_genes is just one gene
+                line = spec1_gene + '\t' + spec2_genes + '\n'
+                fw.write(line)
+            if isinstance(spec2_genes,list): 
+                line = spec1_gene + '\t' + '\t'.join(spec2_genes) + '\n'
+                fw.write(line)
+    
+    return
 
 ## Grouping genes
 def threshold_sign(x, high_threshold, low_threshold): 
@@ -2349,7 +2380,8 @@ def write_promoter_file(promoter_database, gene_list,fname):
                 print(gene + " not in promoter data set.")
     return
 
-def build_motif_dict(fname = data_processing_dir + os.path.normpath('motifs/JASPAR_CORE_2016_fungi.meme')): 
+def build_motif_dict(fname):
+    #removed default - it should be:  = data_processing_dir + os.path.normpath('motifs/JASPAR_CORE_2016_fungi.meme')
     motif_dict = {}
     with open(fname,'r') as f: 
         for line in f: 
