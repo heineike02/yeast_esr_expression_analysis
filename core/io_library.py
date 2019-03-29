@@ -24,6 +24,7 @@ import requests
 from lxml import etree    #parses xml output
 from itertools import product
 import pickle
+from itertools import chain
 
 base_dir = ''
 data_processing_dir = ''
@@ -1653,6 +1654,127 @@ def get_WGH_pairs_by_spec(spec):
     ohnologs.set_index('anc', inplace=True)
 
     return ohnologs
+
+def make_orth_file_YGOB_regev(spec1,spec2):
+    #makes an ortholog file that goes from 
+    #spec1_spec2-orthologs.txt (from YGOB dir) -> spec2_YGOB-spec2_regev-orthologs.txt (from regev dir)
+
+    #Load Spec1-Spec2 from YGOB
+    orth_dir_YGOB =  data_processing_dir + "ortholog_files_YGOB" + os.sep
+    spec1_spec2_YGOB = read_orth_lookup_table(spec1,spec2, orth_dir_YGOB)
+
+    #Load spec2_YGOB-spec2_Regev
+    orth_dir_regev = data_processing_dir + "ortholog_files_regev" + os.sep
+    spec2_YGOB_regev = read_orth_lookup_table(spec2 + '_YGOB',spec2 + '_regev', orth_dir_regev)
+
+    spec1_spec2_regev = {}
+    for spec1_gene_YGOB, spec2_genes_YGOB in spec1_spec2_YGOB.items(): 
+        if len(spec2_genes_YGOB)==1: 
+            spec2_gene_YGOB= spec2_genes_YGOB[0]
+            if spec2_gene_YGOB == 'NONE':
+                spec1_spec2_regev[spec1_gene_YGOB] = ['NONE']
+            else: 
+                spec1_spec2_regev[spec1_gene_YGOB] = spec2_YGOB_regev[spec2_gene_YGOB]
+        else:  
+            spec2_genes_regev = []
+            for spec2_gene_YGOB in spec2_genes_YGOB: 
+                spec2_genes_regev_jj = spec2_YGOB_regev[spec2_gene_YGOB]
+                if not(spec2_genes_regev_jj[0]=='NONE'):
+                    spec2_genes_regev.append(spec2_genes_regev_jj)
+            if len(spec2_genes_regev)==0:
+                spec1_spec2_regev[spec1_gene_YGOB] = ['NONE']
+            else: 
+                spec1_spec2_regev[spec1_gene_YGOB] = list(chain.from_iterable(spec2_genes_regev))
+    
+    orth_lookup_outputfname = os.path.normpath(data_processing_dir + 'ortholog_files_regev/' + spec1 + "-" + spec2 + "-orthologs.txt"  )
+    
+    print('saving ' + orth_lookup_outputfname)
+    print_ortholog_file(orth_lookup_outputfname, spec1_spec2_regev)
+    
+    return spec1_spec2_regev
+
+def make_orth_file_regev_YGOB(spec1, spec2):
+    #makes an ortholog file that goes from 
+    #spec1_regev-spec1_YGOB-orthologs.txt (from regev dir) -> spec1_spec2-orthologs.txt (from YGOB dir)
+
+    #Load spec1_regev-spec1_YGOB from regev dir
+    orth_dir_regev = data_processing_dir + "ortholog_files_regev" + os.sep
+    spec1_regev_YGOB = read_orth_lookup_table(spec1 + '_regev',spec1 + '_YGOB', orth_dir_regev)
+
+    #Load Spec1-Spec2 from YGOB
+    orth_dir_YGOB =  data_processing_dir + "ortholog_files_YGOB" + os.sep
+    spec1_spec2_YGOB = read_orth_lookup_table(spec1,spec2, orth_dir_YGOB)
+
+    spec1_spec2_regev_YGOB = {}
+    for spec1_gene_regev, spec1_genes_YGOB in spec1_regev_YGOB.items(): 
+        if len(spec1_genes_YGOB)==1: 
+            spec1_gene_YGOB = spec1_genes_YGOB[0]
+            if spec1_gene_YGOB == 'NONE':
+                spec1_spec2_regev_YGOB[spec1_gene_regev] = ['NONE']
+            else: 
+                spec1_spec2_regev_YGOB[spec1_gene_regev] = spec1_spec2_YGOB[spec1_gene_YGOB]
+        else:  
+            spec2_genes_YGOB = []
+            for spec1_gene_YGOB in spec1_genes_YGOB: 
+                spec2_genes_YGOB_jj = spec1_spec2_YGOB[spec1_gene_YGOB]
+                if not(spec2_genes_YGOB_jj[0]=='NONE'):
+                    spec2_genes_YGOB.append(spec2_genes_YGOB_jj)
+            if len(spec2_genes_YGOB)==0:
+                spec1_spec2_regev_YGOB[spec1_gene_regev] = ['NONE']
+            else: 
+                spec1_spec2_regev_YGOB[spec1_gene_regev] = list(chain.from_iterable(spec2_genes_YGOB))
+
+    orth_lookup_outputfname = os.path.normpath(data_processing_dir + 'ortholog_files_regev/' + spec1 + "-" + spec2 + "-orthologs.txt"  )
+
+    print('saving ' + orth_lookup_outputfname)
+    print_ortholog_file(orth_lookup_outputfname, spec1_spec2_regev_YGOB)
+
+    return spec1_spec2_regev_YGOB
+
+def pairwise_hits_to_orth_dict(pairwise_score, high_thresh, low_thresh, diff_thresh):
+    #Given a dictionary from a species genename list to a list of options with scores for hits, 
+    #makes a dictionary 1:many from one to the other using a high threshold, low threshold and difference in threshold to drop
+    #for throwing out possibilities. 
+    
+    YGOB_regev = {}
+    for genename_YGOB, options in pairwise_score.items(): 
+        genename_max = options.idxmax()
+        max_val = options[genename_max]
+        if max_val < low_thresh: 
+            print('No Match ' + genename_YGOB)
+            YGOB_regev[genename_YGOB] = ['NONE']
+        else: 
+            assert max_val > high_thresh , 'Max val not greater than high threshold'
+            options_rest = options.drop(genename_max)
+            genename_nextmax = options_rest.idxmax()
+            nextmax_val = options_rest[genename_nextmax]
+            if nextmax_val > high_thresh: 
+                diff = max_val-nextmax_val
+                print('More than one match {}, diff = {:.2f}'.format(genename_YGOB, diff))
+                genename_max_list = [genename_max]
+
+                #Keep adding regev genenames to the list until they are past the threshold
+                while diff<diff_thresh:
+                    genename_max_list.append(genename_nextmax)
+                    nextmax_val_old = nextmax_val
+                    genename_nextmax_old = genename_nextmax
+                    if len(options_rest)==1: 
+                        print("diff thresh never met " + genename_YGOB)
+                        genename_nextmax = options_rest.index[0]
+                        genename_max_list.append(genename_nextmax)
+                        diff = diff_thresh + 2
+                    else: 
+                        options_rest = options_rest.drop(genename_nextmax_old)
+                        genename_nextmax = options_rest.idxmax()
+                        nextmax_val = options_rest[genename_nextmax]
+                        diff = nextmax_val_old-nextmax_val
+                YGOB_regev[genename_YGOB] = genename_max_list
+            else: 
+                YGOB_regev[genename_YGOB] = [genename_max]
+
+    #     maxvals.append(maxvals)
+
+    return YGOB_regev
 
 def load_YGOB_annotations(species, species_tab_file):
     #previously base_dir was the middle input
