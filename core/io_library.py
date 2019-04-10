@@ -2211,6 +2211,54 @@ def go_terms_by_gene(sc_genename_list):
     return go_term_list
 
 ## Promoter analysis
+
+class PromHits(dict):
+    def __init__(self, prom_counts_subset, motif_dict, prefix = ''):
+        if prefix != '': 
+            prefix = prefix + '_'
+        self['total']= len(prom_counts_subset)
+        self.prom_counts = prom_counts_subset
+        self['hits'] = {}
+        self['pct'] = {}
+        self['avg'] = {}
+        for motif_name in motif_dict.keys():
+            hits_motif = sum(prom_counts_subset[prefix + motif_name + '_count']>0)
+            self['hits'][motif_name] = hits_motif
+            self['pct'][motif_name] = hits_motif/self['total']
+            self['avg'][motif_name] = prom_counts_subset[prefix + motif_name + '_count'].sum()/self['total']
+
+class PromComparison(dict):
+    def __init__(self, promsets):
+        self['promsets'] = promsets
+    
+    def generate_pval(self, promhits1, promhits2, set2type, motif_dict):
+        #set2type can be 'all' or 'another_set'
+        self.PromHits1 = promhits1
+        self.PromHits2 = promhits2
+        self.set2type = set2type
+        N1_total = promhits1['total']
+        self['pval'] = {}
+        for motif_name in motif_dict.keys():
+            N1_hits = promhits1['hits'][motif_name]
+            if set2type=='all': 
+                N_all_hits = promhits2['hits'][motif_name]
+                N_all_total = promhits2['total'] 
+                N2_hits = N_all_hits-N1_hits
+                N2_total = N_all_total - N1_total
+            elif set2type == 'another_set': 
+                N2_hits = promhits2['hits'][motif_name]
+                N2_total = promhits2['total'] 
+
+            oddsratio, pvalue = stats.fisher_exact([[N1_hits, N2_hits],
+                                                [N1_total, N2_total]], 
+                                                  alternative = 'two-sided')
+            self['pval'][motif_name] = pvalue
+            
+    #Would be nice to have a test to see if the average number of STREs is 
+    #different - would need to look at distributions first.  Some discrete 
+    #distribution with lots of zeros.  
+    
+
 def extract_promoter_sequence(gene, prom_length):
     #extracts promoter sequence from NCBI for a given gene. 
     

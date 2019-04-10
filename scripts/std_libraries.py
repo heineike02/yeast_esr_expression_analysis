@@ -24,16 +24,18 @@ io_library.data_processing_dir = data_processing_dir
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.patches import Polygon  #Circle, Wedge, 
+from matplotlib.collections import PatchCollection
 #import matplotlib.colormap as cm
 #from matplotlib_venn import venn2
 #for my windows10 laptop I had to install this package using pip rather than anaconda.  
-#import seaborn as sns; sns.set(style="ticks", color_codes=True)
+import seaborn as sns; sns.set(style="ticks", color_codes=True)  #not sure why I set color codes on ticks to be true
 #from sklearn import linear_model
 import pickle
 #import subprocess
 #import networkx as nx
-#import scipy.stats as stats
-#import statsmodels.api as sm
+import scipy.stats as stats
+import statsmodels.api as sm
 #import scipy.spatial.distance as spd
 #import statsmodels.graphics.gofplots as stats_graph
 #import scipy.cluster.hierarchy as sch
