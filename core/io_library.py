@@ -729,7 +729,7 @@ def de_stress_gois(spec, columns_to_combine, goi_criteria):
     
     #For species that have different names in YGOB (for ohnolog names) than in expression data (regev names), 
     #makes genename_gene1 and genename_gene2 the ohnolog name
-    if spec in {'Ncas'}: 
+    if spec in {'Ncas', 'Smik'}: 
         print('Species is ' + spec + ', translating gene names from YGOB to regev')
         
         orth_dir_regev = data_processing_dir + "ortholog_files_regev" + os.sep
@@ -1423,6 +1423,7 @@ def kl_genename_convert_list(kl_genes):
     
 ## Dealing with Orthologs
 def write_YGOB_orth_lookup_table(spec1, spec2):
+    ##!! Post WGH to post WGH is incorrect here - can't just use Pillars!!
     #Makes an orhtolog lookup table for all species in the YGOB Pillars data. 
     #spec1 the index, spec2 is the lookup.  multiple orthologs separated by tabs, NONE if there are none.  
     #Note that this cannot lookup Small Scale Duplications after the WGH because that data is not part of the pillars 
@@ -1549,39 +1550,41 @@ def write_YGOB_orth_lookup_table(spec1, spec2):
     #If there is only one ortholog for one gene, it will list the other one regardless of track.  
 
     if ((spec1 in orth_positions_post_WGH.keys()) & (spec2 in orth_positions_post_WGH.keys())): 
-        spec1_columns = orth_positions_post_WGH[spec1]
-        spec2_columns = orth_positions_post_WGH[spec2]
+        print(spec1 + ' and ' + spec2 + ' are both post WGH species and the pillars file does not assign syntenic orthologs.  Use write_YGOB_orth_lookup_table_goi')
+        return
+    #         spec1_columns = orth_positions_post_WGH[spec1]
+    #         spec2_columns = orth_positions_post_WGH[spec2]
 
-        with open(fname) as f:
-            orth_lookup = {}
-            for line in f:
-                linesp = line.split()
-                spec1_genes = []
-                for spec1_column in spec1_columns: 
-                    spec1_gene = linesp[spec1_column]
-                    if spec1_gene!= '---':
-                        spec1_genes.append(spec1_gene)
-                
-                if len(spec1_genes)==2: 
-                    for jj,spec1_gene in enumerate(spec1_genes): 
-                        spec2_column = spec2_columns[jj]
-                        spec2_gene = linesp[spec2_column]
-                        if spec2_gene!='---':
-                            orth_lookup[spec1_gene] = [spec2_gene]
-                        else: 
-                            orth_lookup[spec1_gene] = ['NONE']
-                            
-                elif len(spec1_genes)==1: 
-                    spec1_gene = spec1_genes[0]
-                    spec2_genes = []
-                    for spec2_column in spec2_columns: 
-                        spec2_gene = linesp[spec2_column]
-                        if spec2_gene!='---':
-                            spec2_genes.append(spec2_gene)
-                    if len(spec2_genes)==0:
-                        orth_lookup[spec1_gene] = 'NONE'
-                    else: 
-                        orth_lookup[spec1_gene] = spec2_genes
+    #         with open(fname) as f:
+    #             orth_lookup = {}
+    #             for line in f:
+    #                 linesp = line.split()
+    #                 spec1_genes = []
+    #                 for spec1_column in spec1_columns: 
+    #                     spec1_gene = linesp[spec1_column]
+    #                     if spec1_gene!= '---':
+    #                         spec1_genes.append(spec1_gene)
+
+    #                 if len(spec1_genes)==2: 
+    #                     for jj,spec1_gene in enumerate(spec1_genes): 
+    #                         spec2_column = spec2_columns[jj]
+    #                         spec2_gene = linesp[spec2_column]
+    #                         if spec2_gene!='---':
+    #                             orth_lookup[spec1_gene] = [spec2_gene]
+    #                         else: 
+    #                             orth_lookup[spec1_gene] = ['NONE']
+
+    #                 elif len(spec1_genes)==1: 
+    #                     spec1_gene = spec1_genes[0]
+    #                     spec2_genes = []
+    #                     for spec2_column in spec2_columns: 
+    #                         spec2_gene = linesp[spec2_column]
+    #                         if spec2_gene!='---':
+    #                             spec2_genes.append(spec2_gene)
+    #                     if len(spec2_genes)==0:
+    #                         orth_lookup[spec1_gene] = 'NONE'
+    #                     else: 
+    #                         orth_lookup[spec1_gene] = spec2_genes
 
 
 
@@ -1654,6 +1657,179 @@ def get_WGH_pairs_by_spec(spec):
     ohnologs.set_index('anc', inplace=True)
 
     return ohnologs
+
+def write_YGOB_orth_lookup_table_goi(spec1, spec2):
+    #This is necessary because pillars does not specify syntenic assignment for post-WGH genes
+    #uses data generated from YGOB in 20190708_DEpka_post_WGH_YGOB_synteny_assign
+
+    #Makes an orhtolog lookup table for all species in the YGOB Pillars data for just goi
+    #spec1 the index, spec2 is the lookup.  multiple orthologs separated by tabs, NONE if there are none.  
+
+    #Note that this cannot lookup Small Scale Duplications after the WGH because that data is not part of the pillars 
+
+
+    fname = os.path.normpath(data_processing_dir + "ortholog_files_YGOB/YGOB_pillars_goi.txt")
+
+    #YGOB_Pillars.txt order of species: 
+    #    0    V. polyspora Position B
+    #    1    T. phaffii Position B
+    #    2    T. blattae Position B
+    #    3    N. dairenensis Position B
+    #    4    N. castellii Position B
+    #    5    K. naganishii Position B
+    #    6    K. africana Position B
+    #    7    C. glabrata Position B
+    #    8    S. bayanus var. uvarum Position B
+    #    9    S. kudriavzevii Position B
+    #    10   S. mikatae Position B
+    #    11   S. cerevisiae Position B
+    #    12   L. waltii
+    #    13   L. thermotolerans
+    #    14   L. kluyveri
+    #    15   E. cymbalariae
+    #    16   E. gossypii 
+    #    17   K. lactis
+    #    18   T. delbrueckii
+    #    19   Z. rouxii
+    #    20   Ancestral Gene Order
+    #    21   S. cerevisiae Position A
+    #    22   S. mikatae Position A
+    #    23   S. kudriavzevii Position A
+    #    24   S. bayanus var. uvarum Position A
+    #    25   C. glabrata Position A
+    #    26   K. africana Position A
+    #    27   K. naganishii Position A
+    #    28   N. castellii Position A
+    #    29   N. dairenensis Position A
+    #    30   T. blattae Position A
+    #    31   T. phaffii Position A
+    #    32   V. polyspora Position A
+
+    #position in pillars file of ancestor
+    #anc_pos = 20
+
+    #for regev lab expression data, Suva and Sbay have same gene names. 
+    orth_positions_post_WGH = {'Vpol': [0,32], 'Tpha': [1,31], 'Tbla': [2,30], 'Ndai': [3,29], 
+                      'Ncas': [4,28], 'Knag': [5,27], 'Kafr': [6,26], 'Cgla': [7,25],
+                      'Suva': [8,24], 'Sbay':[8,24], 'Skud': [9,23], 'Smik': [10,22], 'Scer' : [11,21]}
+
+
+    orth_positions_pre_WGH = {'Zrou':19, 'Tdel':18, 'Klac':17, 'Egos':16, 'Ecym': 15, 'Lklu':14, 'Lthe':13, 'Lwal':12}
+
+    #Case1: spec1 post WGH, spec2 pre WGH
+
+    if ((spec1 in orth_positions_post_WGH.keys()) & (spec2 in orth_positions_pre_WGH.keys())): 
+        spec1_columns = orth_positions_post_WGH[spec1]
+        spec2_column = orth_positions_pre_WGH[spec2]
+
+        with open(fname) as f:
+            orth_lookup = {}
+            for line in f:
+                linesp = line.split()
+                for spec1_column in spec1_columns: 
+                    spec1_gene = linesp[spec1_column]
+                    if spec1_gene!= '---':
+                        spec2_gene = linesp[spec2_column]
+                        if spec2_gene!='---': 
+                            orth_lookup[spec1_gene] = spec2_gene
+                        else: 
+                            orth_lookup[spec1_gene] = 'NONE'
+
+    #Case2: spec1 pre WGH, spec2 pre WGH
+
+    if ((spec1 in orth_positions_pre_WGH.keys()) & (spec2 in orth_positions_pre_WGH.keys())): 
+        spec1_column = orth_positions_pre_WGH[spec1]
+        spec2_column = orth_positions_pre_WGH[spec2]
+
+        with open(fname) as f:
+            orth_lookup = {}
+            for line in f:
+                linesp = line.split()
+                spec1_gene = linesp[spec1_column]
+                if spec1_gene!= '---':
+                    spec2_gene = linesp[spec2_column]
+                    if spec2_gene!='---': 
+                        orth_lookup[spec1_gene] = spec2_gene
+                    else: 
+                        orth_lookup[spec1_gene] = 'NONE'
+
+
+
+
+    #Case 3: spec1 pre WGH, spec2 post WGH
+    #In this case there will often be more than one ortholog per pre WGH gene
+
+    if ((spec1 in orth_positions_pre_WGH.keys()) & (spec2 in orth_positions_post_WGH.keys())): 
+        spec1_column = orth_positions_pre_WGH[spec1]
+        spec2_columns = orth_positions_post_WGH[spec2]
+
+        with open(fname) as f:
+            orth_lookup = {}
+            for line in f:
+                linesp = line.split()
+                spec1_gene = linesp[spec1_column]
+                if spec1_gene!= '---':
+                    spec2_genes = []
+                    for spec2_column in spec2_columns: 
+                        spec2_gene = linesp[spec2_column]
+                        if spec2_gene!='---':
+                            spec2_genes.append(spec2_gene)
+                    if len(spec2_genes)==0:
+                        orth_lookup[spec1_gene] = 'NONE'
+                    else: 
+                        orth_lookup[spec1_gene] = spec2_genes
+
+
+    #Case 4: spec1 post WGH, spec2 post WGH
+    #use tracks in pillars file to match up WGH genes.  If there are two paralogs, this will match tracks. 
+    #If there is one paralog, and there are two orthologs, it will list both.  
+    #If there is only one ortholog for one gene, it will list the other one regardless of track.  
+
+    if ((spec1 in orth_positions_post_WGH.keys()) & (spec2 in orth_positions_post_WGH.keys())): 
+        spec1_columns = orth_positions_post_WGH[spec1]
+        spec2_columns = orth_positions_post_WGH[spec2]
+
+        with open(fname) as f:
+            orth_lookup = {}
+            for line in f:
+                linesp = line.split()
+                spec1_genes = []
+                for spec1_column in spec1_columns: 
+                    spec1_gene = linesp[spec1_column]
+                    if spec1_gene!= '---':
+                        spec1_genes.append(spec1_gene)
+
+                if len(spec1_genes)==2: 
+                    for jj,spec1_gene in enumerate(spec1_genes): 
+                        spec2_column = spec2_columns[jj]
+                        spec2_gene = linesp[spec2_column]
+                        if spec2_gene!='---':
+                            orth_lookup[spec1_gene] = [spec2_gene]
+                        else: 
+                            orth_lookup[spec1_gene] = ['NONE']
+
+                elif len(spec1_genes)==1: 
+                    spec1_gene = spec1_genes[0]
+                    spec2_genes = []
+                    for spec2_column in spec2_columns: 
+                        spec2_gene = linesp[spec2_column]
+                        if spec2_gene!='---':
+                            spec2_genes.append(spec2_gene)
+                    if len(spec2_genes)==0:
+                        orth_lookup[spec1_gene] = 'NONE'
+                    else: 
+                        orth_lookup[spec1_gene] = spec2_genes
+
+
+
+
+
+    orth_lookup_outputfname = os.path.normpath(data_processing_dir + 'ortholog_files_YGOB/' + spec1 + "-" + spec2 + "-goi-orthologs.txt"  )
+
+    print(orth_lookup_outputfname)
+    print_ortholog_file(orth_lookup_outputfname, orth_lookup)
+
+    return orth_lookup 
 
 def make_orth_file_YGOB_regev(spec1,spec2):
     #makes an ortholog file that goes from 
@@ -1862,21 +2038,33 @@ def join_ohnologs_and_sort(data_to_add, ohnologs, sort_column):
     #Adds data_to_add, a dataframe indexed on genenames to a dataframe of ohnologs
     #from YGOB_pillars (i.e. from get_WGH_pairs_by_spec) indexed on ancestor, and with column names 
     #genename_gene1 and genename_gene2.  
-    #sort_column is a column in data_to_add and output paralogs are sorted into low and high sets based on that 
-
+    #sort_column is a column in data_to_add and output paralogs are sorted into low and high sets based on that
+    #Example Sort column: 'log2FoldChange
+    # 
+    # For S. Cer, we have the ohnologs saved in a file, and need to rindex and rename prior to using it.  
+    # 
+    # ohnologs = pd.read_csv(data_processing_dir + os.path.normpath("ortholog_files_YGOB/ohnologs.csv"), index_col=0)
+    # ohnologs.set_index('Ancestor', inplace=True)
+    # ohnologs.rename(columns={"Gene 1": "genename_gene1",
+    #                          "Gene 2": "genename_gene2"}, inplace=True)
+    # 
+    # After running for S.Cer, to add SC_common_name, 
+    #
+    # for level in ['low','high']: 
+    #     ohnologs_expression_sorted['SC_common_name_' + level] = io_library.SC_common_name_lookup(ohnologs_expression_sorted['genename_' + level])
+    # ohnologs_expression_sorted.drop(columns=['Gene Name 1', 'Gene Name 2'], inplace=True)
+    
+    # # Rename Gene Name 1 and Gene Name 2 columns
+    # ohnologs_expression.rename(columns = {'Gene 1' : 'genename_gene1',
+    #                                       'Gene 2' : 'genename_gene2'}, inplace = True)
+    
     ohnologs_expression_gene1 = pd.merge(ohnologs, data_to_add, how = 'inner', left_on = 'genename_gene1', right_index = True)
     ohnologs_expression = pd.merge(ohnologs_expression_gene1, data_to_add, how = 'inner', left_on = 'genename_gene2', right_index = True, suffixes = ['_gene1', '_gene2'])
 
     ## This seems important if you are not merging on the index
     ## Drop Gene 1 and Gene 2 columns
     #ohnologs_expression.drop(['Gene 1', 'Gene 2'], axis = 1, inplace = True)
-
-    # # Rename Gene Name 1 and Gene Name 2 columns
-    # ohnologs_expression.rename(columns = {'Gene 1' : 'sc_genename_gene1',
-    #                                       'Gene 2' : 'sc_genename_gene2',
-    #                                       'Gene Name 1':'SC_common_name_gene1',
-    #                                       'Gene Name 2':'SC_common_name_gene2'}, inplace = True)
-
+    
     new_columns = {}
     for level in ['low','high']:
         new_columns['genename_' + level] = []
@@ -2100,7 +2288,7 @@ def load_goslim_data(GO_aspect, go_slim_fname = 'go_slim_mapping_20181204.tab'):
     #C = cellular_component
     #F = molecular_function
     #P = biological_process
-    go_slims = pd.read_table(data_processing_dir + os.path.normpath('/go_terms/' + go_slim_fname),header = None)
+    go_slims = pd.read_table(data_processing_dir + os.path.normpath('go_terms/' + go_slim_fname),header = None)
     go_slims.columns = ['sc_genename','SC_common_name','sgd_ID','GO_aspect','GO_term','GO_term_ID','feature_type']
     
     go_slims_aspect = go_slims[go_slims['GO_aspect']==GO_aspect]
@@ -2214,19 +2402,64 @@ def go_terms_by_gene(sc_genename_list):
 
 class PromHits(dict):
     def __init__(self, prom_counts_subset, motif_dict, prefix = ''):
+        #7/29/19 Changed format of motif dict so that it included length of the promoter to check as well as the sequence
         if prefix != '': 
             prefix = prefix + '_'
+        self.motif_dict = motif_dict   #records the motif_dict input as metadata
         self['total']= len(prom_counts_subset)
         self.prom_counts = prom_counts_subset
         self['hits'] = {}
+        self['hits_vec'] = {}
         self['pct'] = {}
         self['avg'] = {}
         for motif_name in motif_dict.keys():
-            hits_motif = sum(prom_counts_subset[prefix + motif_name + '_count']>0)
+            #hits_motif = sum(prom_counts_subset[prefix + motif_name + '_count']>0)
+            L_prom = motif_dict[motif_name][1]
+            hits_vec = []
+            
+            for hit_list in prom_counts_subset[prefix + motif_name + '_full_features']:
+                N_hits = 0
+                for (loc, strand, context) in hit_list: 
+                    if loc<L_prom:
+                        N_hits = N_hits + 1
+                hits_vec.append(N_hits)
+            
+            hits_motif = sum(np.array(hits_vec)>0)          
             self['hits'][motif_name] = hits_motif
-            self['pct'][motif_name] = hits_motif/self['total']
+            
+            hits_vec_series = pd.Series(index = prom_counts_subset.index, data= hits_vec)
+            self['hits_vec'][motif_name]=hits_vec_series           
+            
+            if self['total']==0:
+                self['pct'][motif_name] = np.nan
+            else: 
+                self['pct'][motif_name] = hits_motif/self['total']
             self['avg'][motif_name] = prom_counts_subset[prefix + motif_name + '_count'].sum()/self['total']
+    
+    def STRE_TATA_combined(self,ranges): 
+        #Quantify combined STRE and TATA presence
+        
+        hits = []
 
+        for row in self.prom_counts.iterrows():
+            motif_conditions = {}
+            for motif in ['STRE','TATA']:
+                motif_conditions[motif] = False
+                if row[1][motif + '_count']>0:
+                    for (loc,strand,motif_found) in row[1][motif+'_full_features']:
+                        if loc<ranges[motif]:
+                            motif_conditions[motif]=True
+
+            if motif_conditions['STRE'] & motif_conditions['TATA']:
+                hits.append(row[0])
+                
+        self['hits']['STRE_TATA'] = len(hits)
+        self['STRE_TATA_hits'] = hits
+        if self['total']==0:
+            self['pct']['STRE_TATA'] = np.nan
+        else: 
+            self['pct']['STRE_TATA'] = len(hits)/self['total']
+                   
 class PromComparison(dict):
     def __init__(self, promsets):
         self['promsets'] = promsets
@@ -2785,6 +3018,18 @@ def hex_color_dictionary(input_list):
     
     return input_color_dict
 
+def exact_motif_pattern_len(motif): 
+    #Finds the length of patterns such as 'TATA[AT]A[AT]' by counting everything within the brackets as just one letter
+    split_left = motif.split('[')
+
+    L = len(split_left[0])
+
+    if len(split_left)>1:
+        for section in split_left[1:]:
+            L = L + 1 + len(section.split(']')[1])
+            
+    return L
+
 def exact_promoter_scan(motif, prom_seq, output_format='count', sequence_context=0):
     #Finds a motif in a sequence object
     # 
@@ -2805,7 +3050,7 @@ def exact_promoter_scan(motif, prom_seq, output_format='count', sequence_context
     #
     ## output of full changed to be an empty list if there are no hits.  Before it was None. 
     
-    L_motif = len(motif)
+    L_motif = exact_motif_pattern_len(motif)
 
     #fwd search
     prom_seq_fwd = str(prom_seq.seq)
@@ -2962,6 +3207,149 @@ def exact_promoter_scan_genelist(gene_list, motif_dict, promoter_database, outpu
         output_data_frame[motif_name] = output_motif    
     
     return output_data_frame
+
+def exact_promoter_scan_genelist_dict(gene_list, promoter_dict, motif_dict, output_format = 'counts', sequence_context = 0, L_prom = None): 
+    #For a dictionary of all promoters and a list of genes, find counts, location and sequence context of desired motifs.  
+    #
+    #Input: 
+    #    gene_list: List of genes to analyze from the promoter dict
+    #    promoter_dict: dictionary linking gene name to promoter sequence (a biopython sequence object)
+    #    motif_dict: Dictionary of exact motifs to be used e.g. {'STRE': 'CCCCT'} 
+    #    output_format: 'counts'(default) or 'full'.  If 'full' is selected will also output a list of tuples containing the location of the 
+    #               found motif, and the sequence (with sequence context) of the motif 
+    #    sequence_context:  number of bases surrounding the found motif to print in full output mode (default is 0)
+    #    L_prom: desired promoter length - will shorten the length of the promoter if the input from the fasta is longer than this.  If the promoter is shorter than the given length then the full promoter will be used.  The default is None which uses the whole sequence.  
+    #
+    #Output: Dataframe with each row being the id of the gene and columns for each motif with counts and, if 'full' output mode is selected, 
+    #        a full_features column with all features for each hit (a list of tuples), and None if there are no hits
+
+    output_dict = {}
+    columns = []
+
+    for motif_name, motif in motif_dict.items():
+        if output_format=='count': 
+            columns.append(motif_name + '_count')
+        elif output_format=='full': 
+            columns = columns + [motif_name + '_' + feature for feature in ['count', 'full_features']]   
+        else: 
+            print('Invalid output_format : ' + output_format)
+
+    for gene in gene_list:
+        if gene in promoter_dict.keys():
+            seq = promoter_dict[gene]
+            L_seq = len(seq)
+            if L_prom == None:
+                seq_cropped=seq
+            else:
+                if L_seq > L_prom: 
+                    seq_cropped = seq[(L_seq-L_prom):]
+                else: 
+                    seq_cropped = seq
+            output_row = []
+            for motif_name, motif in motif_dict.items():
+                if output_format=='count': 
+                    prom_hits = exact_promoter_scan(motif, seq_cropped, output_format=output_format, sequence_context = sequence_context)
+                    output_row.append(prom_hits)   #append counts
+                elif output_format=='full': 
+                    prom_hits = exact_promoter_scan(motif, seq_cropped, output_format=output_format, sequence_context = sequence_context)
+                    #add output in the order of columns
+                    counts = len(prom_hits)
+                    output_row.append(counts)     #append count
+                    output_row.append(prom_hits)  #append full_features
+
+            output_dict[gene] = output_row
+        else:
+            print(gene + ' not in promoter_dict')
+
+    output = pd.DataFrame.from_dict(output_dict, orient="index", columns = columns)
+    
+    return output
+
+def exact_promoter_scan_genelist_orths_dict(gene_list_orths, rule, promoter_dict, motif_dict, output_format = 'counts', sequence_context = 0, L_prom = None): 
+
+    #For a dictionary of all promoters and a list of genes, find counts, location and sequence context of desired motifs.  
+    #
+    #Input: 
+    #    gene_list_orths: List of orthologous genes to analyze from the promoter dict.  This is a list
+    #                     of lists because there may be more than one ortholog for a given gene.  
+    #    rule:  the rule for choosing how to deconflict when there is more than one ortholog for a given gene. 
+    #           right now the only rule is to pick the one with the max STRE.  If there are two with the 
+    #           same number of STREs, it just picks the one with the lowest index.
+    #    promoter_dict: dictionary linking gene name to promoter sequence (a biopython sequence object)
+    #    motif_dict: Dictionary of exact motifs to be used e.g. {'STRE': 'CCCCT'} 
+    #    output_format: 'counts'(default) or 'full'.  If 'full' is selected will also output a list of tuples containing the location of the 
+    #               found motif, and the sequence (with sequence context) of the motif 
+    #    sequence_context:  number of bases surrounding the found motif to print in full output mode (default is 0)
+    #    L_prom: desired promoter length - will shorten the length of the promoter if the input from the fasta is longer than this.  If the promoter is shorter than the given length then the full promoter will be used.  The default is None which uses the whole sequence.  
+    #
+    #Output: 
+    #
+    #output_df = Dataframe with each row being the id of the gene and columns for each motif with counts and, if 'full' output mode is selected, 
+    #        a full_features column with all features for each hit (a list of tuples).
+    #
+    #chosen_orths = list that has the same order as the input ortholog list that has values of either "NONE", or 
+    #               the gene that was chosen to represent the ortholog by the given rule
+
+    output_dict = {}
+    columns = []
+
+    for motif_name, motif in motif_dict.items():
+        if output_format=='count': 
+            columns.append(motif_name + '_count')
+        elif output_format=='full': 
+            columns = columns + [motif_name + '_' + feature for feature in ['count', 'full_features']]   
+        else: 
+            print('Invalid output_format : ' + output_format)
+    
+    if rule=='max_STRE':
+        stre_ind = [jj for jj, column in enumerate(columns) if column=='STRE_count'][0]
+        
+    chosen_orths = []
+    for genes in gene_list_orths:
+        if len(genes)==0: 
+            chosen_orths.append('NONE')
+        else:   #1 or more genes in orthologs
+            for gene in genes:
+                if gene in promoter_dict.keys():
+                    seq = promoter_dict[gene]
+                    L_seq = len(seq)
+                    if L_prom == None:
+                        seq_cropped=seq
+                    else:
+                        if L_seq > L_prom: 
+                            seq_cropped = seq[(L_seq-L_prom):]
+                        else: 
+                            seq_cropped = seq
+                    output_row = []
+                    for motif_name, motif in motif_dict.items():
+                        if output_format=='count': 
+                            prom_hits = exact_promoter_scan(motif, seq_cropped, output_format=output_format, sequence_context = sequence_context)
+                            output_row.append(prom_hits)   #append counts
+                        elif output_format=='full': 
+                            prom_hits = exact_promoter_scan(motif, seq_cropped, output_format=output_format, sequence_context = sequence_context)
+                            #add output in the order of columns
+                            counts = len(prom_hits)
+                            output_row.append(counts)     #append count
+                            output_row.append(prom_hits)  #append full_features
+
+                    output_dict[gene] = output_row
+                else:
+                    print(gene + ' not in promoter_dict')
+            if len(genes)==1:
+                chosen_orths.append(gene)
+            else:
+                if rule=='max_STRE':
+                    stre_counts = []
+                    for gene in genes:
+                        stre_counts.append(output_dict[gene][stre_ind])
+                    chosen_orths.append(genes[np.argmax(stre_counts)])  #Chooses the one with the most STRES, if there are two, chooses the first
+                else: 
+                    raise ValueError('No rule for choosing orths')
+
+
+    output_df = pd.DataFrame.from_dict(output_dict, orient="index", columns = columns)
+    
+    return output_df, chosen_orths
 
 def motif_scan_YGOB_specs(ohnologs_goi, seed_spec, spec_order_pre_WGH, spec_order_post_WGH, motif_dict, L_prom=700,output_format='full', sequence_context=2 ):
     #searches for STRE within a set of ohnologs
@@ -3629,5 +4017,10 @@ def correlation_nan_filt(v1, v2):
     v2_filt = [item for jj, item in enumerate(v2) if ~v1_v2_nan[jj]]
 
     corr_dist = spd.correlation(v1_filt, v2_filt)
+    
+    #assign 1 
+    if np.isnan(corr_dist):
+        corr_dist=1.0  
+        print("io_library.correlation_nan_filt.  Warning: encountered vector of all 0's.  Assigned correlation distance of 1.")
     
     return corr_dist
