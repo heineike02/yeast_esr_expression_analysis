@@ -1357,7 +1357,11 @@ def SC_common_name_columns_ohnologs(ohnologs_sorted, spec, orth_dir):
     #Input:
     #    ohnologs_sorted: dataframe with ohnologs sorted into low and high based on some criteria.  Need
     #        to have columns "genename_low" and "genename_high"
-    #    spec: four letter abbreviation of species. 
+    #    spec: four letter abbreviation of species.
+    #    orth_dir:  directory of ortholog file
+    #         YGOB: data_processing_dir + "ortholog_files_YGOB" + os.sep
+    #         regev: data_processing_dir + "ortholog_files_regev" + os.sep
+    #         y1000: data_processing_dir + "ortholog_files_y1000" + os.sep
 
     if spec=='Scer': 
         for level in ['low', 'high']:
@@ -1998,6 +2002,10 @@ def get_species_from_gene(gene, species_info):
 
 def read_orth_lookup_table(species1, species2, orth_dir):
     #ensure orth_dir has a separator at the end of it.
+    #examples: 
+    #YGOB: data_processing_dir + "ortholog_files_YGOB" + os.sep
+    #regev: data_processing_dir + "ortholog_files_regev" + os.sep
+    #y1000: data_processing_dir + "ortholog_files_y1000" + os.sep
     #For a given species read in the ortholog file, make a dictionary
     #formerly used the full name of the species, but 2/20/2018 switched to using four letter abbreviations. 
     #orth_file_abbrev = {'Kluyveromyces lactis': 'Klac', 'Saccharomyces cerevisiae': 'Scer', 'Candida glabrata':'Cgla', 'Saccharomyces castellii' : 'Scas', 'Saccharomyces bayanus' : 'Sbay'}
@@ -3092,16 +3100,16 @@ def exact_promoter_scan(motif, prom_seq, output_format='count', sequence_context
         
     return output
 
-def exact_promoter_scan_from_fasta(promoters_fname, motif_dict, output_format = 'counts', sequence_context = 0, seq_key_func = lambda seq : seq.id, L_prom = None): 
+def exact_promoter_scan_from_fasta(promoters_fname, motif_dict, output_format = 'counts', sequence_context = 0, seq_key_func = lambda seq : seq.id): 
     #For a fasta file of promoters (with Id and sequence for each line) and a dictionary of exact motifs finds counts, location, and sequence context of found motifs.
     #
     #Input: 
     #    promoters_fname: filename of promoter fasta file
-    #    motif_dict: Dictionary of exact motifs to be used e.g. {'STRE': 'CCCCT'} 
+    #    motif_dict: Dictionary of exact motifs to be used e.g. {'STRE': ('CCCCT',L_prom)} 
     #    output_format: 'counts'(default) or 'full'.  If 'full' is selected will also output a list of tuples containing the location of the 
     #               found motif, and the sequence (with sequence context) of the motif 
     #    sequence_context:  number of bases surrounding the found motif to print in full output mode (default is 0)
-    #    L_prom: desired promoter length - will shorten the length of the promoter if the input from the fasta is longer than this.  If the promoter is shorter than the given length then the full promoter will be used.  The default is None which uses the whole sequence.  
+    #    #deprecated argument, now L_prom is included for each motif   L_prom: desired promoter length - will shorten the length of the promoter if the input from the fasta is longer than this.  If the promoter is shorter than the given length then the full promoter will be used.  The default is None which uses the whole sequence.  
     #
     #Output: Dataframe with each row being the id of the gene and columns for each motif with counts and, if 'full' output mode is selected, 
     #        a full_features column with all features for each hit (a list of tuples), and None if there are no hits
@@ -3111,7 +3119,7 @@ def exact_promoter_scan_from_fasta(promoters_fname, motif_dict, output_format = 
     output_dict = {}
     columns = []
 
-    for motif_name, motif in motif_dict.items():
+    for motif_name, (motif,L_prom) in motif_dict.items():
         if output_format=='count': 
             columns.append(motif_name + '_count')
         elif output_format=='full': 
@@ -3122,16 +3130,16 @@ def exact_promoter_scan_from_fasta(promoters_fname, motif_dict, output_format = 
     for seq in record_iterator: 
         gene_id = seq_key_func(seq)
         L_seq = len(seq)
-        if L_prom == None:
-            seq_cropped=seq
-        else:
-            if L_seq > L_prom: 
-                seq_cropped = seq[(L_seq-L_prom):]
-            else: 
-                seq_cropped = seq
         output_row = []
-        for motif_name, motif in motif_dict.items():
-            if output_format=='count': 
+        for motif_name, (motif,L_prom) in motif_dict.items():
+            if L_prom == None:
+                seq_cropped=seq
+            else:
+                if L_seq > L_prom: 
+                    seq_cropped = seq[(L_seq-L_prom):]
+                else: 
+                    seq_cropped = seq
+            if output_format=='count':
                 prom_hits = exact_promoter_scan(motif, seq_cropped, output_format=output_format, sequence_context = sequence_context)
                 output_row.append(prom_hits)   #append counts
             elif output_format=='full': 
@@ -3208,7 +3216,7 @@ def exact_promoter_scan_genelist(gene_list, motif_dict, promoter_database, outpu
     
     return output_data_frame
 
-def exact_promoter_scan_genelist_dict(gene_list, promoter_dict, motif_dict, output_format = 'counts', sequence_context = 0, L_prom = None): 
+def exact_promoter_scan_genelist_dict(gene_list, promoter_dict, motif_dict, output_format = 'counts', sequence_context = 0): 
     #For a dictionary of all promoters and a list of genes, find counts, location and sequence context of desired motifs.  
     #
     #Input: 
@@ -3226,7 +3234,7 @@ def exact_promoter_scan_genelist_dict(gene_list, promoter_dict, motif_dict, outp
     output_dict = {}
     columns = []
 
-    for motif_name, motif in motif_dict.items():
+    for motif_name, (motif, L_prom) in motif_dict.items():
         if output_format=='count': 
             columns.append(motif_name + '_count')
         elif output_format=='full': 
@@ -3238,15 +3246,17 @@ def exact_promoter_scan_genelist_dict(gene_list, promoter_dict, motif_dict, outp
         if gene in promoter_dict.keys():
             seq = promoter_dict[gene]
             L_seq = len(seq)
-            if L_prom == None:
-                seq_cropped=seq
-            else:
-                if L_seq > L_prom: 
-                    seq_cropped = seq[(L_seq-L_prom):]
-                else: 
-                    seq_cropped = seq
             output_row = []
-            for motif_name, motif in motif_dict.items():
+            for motif_name, (motif, L_prom) in motif_dict.items():
+                #crop seq to appropriate length
+                if L_prom == None:
+                    seq_cropped=seq
+                else:
+                    if L_seq > L_prom: 
+                        seq_cropped = seq[(L_seq-L_prom):]
+                    else: 
+                        seq_cropped = seq
+                
                 if output_format=='count': 
                     prom_hits = exact_promoter_scan(motif, seq_cropped, output_format=output_format, sequence_context = sequence_context)
                     output_row.append(prom_hits)   #append counts

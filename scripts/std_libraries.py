@@ -22,9 +22,9 @@ if sys.path[-1] != base_dir:
 
 import os
 
-print("Importing expression plots and io_library and setting base_dir and data_processing_dir")
-from core import expression_plots 
-from core import io_library 
+print("Importing io_library and setting base_dir and data_processing_dir")
+#from core import expression_plots 
+import io_library 
 io_library.base_dir = base_dir
 data_processing_dir = base_dir + os.sep + os.path.normpath("expression_data") + os.sep
 io_library.data_processing_dir = data_processing_dir
@@ -32,6 +32,7 @@ io_library.data_processing_dir = data_processing_dir
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib import ticker
 from matplotlib.lines import Line2D
 from matplotlib.patches import Polygon, Patch, Rectangle  #Circle, Wedge, 
 from matplotlib.collections import PatchCollection
