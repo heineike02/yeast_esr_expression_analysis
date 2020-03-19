@@ -3,8 +3,8 @@ import sys
 
 #Indicate operating environment and import core modules
 location_input = input("what computer are you on? a = Ben's laptop, b = gpucluster, c = Ben's desktop, d = other")
-location_dict = {'a': "C:\\Users\\BMH_work\\github\\expression_broad_data", 'b': "/home/heineike/github/expression_broad_data",
-                 'c': "C:\\Users\\Ben\\Documents\\GitHub\\expression_broad_data", 'd':'you need to add your location to the location_dict'}
+location_dict = {'a': "C:\\Users\\BMH_work\\github\\yeast_esr_expression_analysis", 'b': "/home/heineike/github/yeast_esr_expression_analysis",
+                 'c': "C:\\Users\\Ben\\Documents\\GitHub\\yeast_esr_expression_analysis", 'd':'you need to add your location to the location_dict'}
 figsave_dict = {'a': "C:\\Users\\BMH_work\\Google Drive\\UCSF\\ElSamad_Lab\\PKA\\Manuscript\\" , 
                 'b': "/home/heineike/scratch/",
                 'c': "C:\\Users\\Ben\\Google Drive\\UCSF\\ElSamad_Lab\\PKA\\Manuscript\\", 
@@ -22,22 +22,24 @@ if sys.path[-1] != base_dir:
 
 import os
 
-print("Importing io_library and setting base_dir and data_processing_dir")
+print("Importing yeast_esr_exp and setting base_dir and data_processing_dir")
 #from core import expression_plots 
-import io_library 
-io_library.base_dir = base_dir
+import yeast_esr_exp 
+yeast_esr_exp.base_dir = base_dir
 data_processing_dir = base_dir + os.sep + os.path.normpath("expression_data") + os.sep
-io_library.data_processing_dir = data_processing_dir
+yeast_esr_exp.data_processing_dir = data_processing_dir
 
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.colors as mpl_colors
+#import matplotlib.colormap as cm
 from matplotlib import ticker
 from matplotlib.lines import Line2D
 from matplotlib.patches import Polygon, Patch, Rectangle  #Circle, Wedge, 
 from matplotlib.collections import PatchCollection
 from matplotlib.gridspec import GridSpec
-#import matplotlib.colormap as cm
+
 from matplotlib_venn import venn2
 from matplotlib_venn import venn3
 import squarify  #Makes treegraphs. 
