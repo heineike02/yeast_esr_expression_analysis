@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #from IPython.core.debugger import Tracer
-print('Importing io_library.  If autoreload, may need to reset base_dir and data_processing dir \n  io_library.base_dir=base_dir \n io_library.data_processing_dir = data_processing_dir')
+print('Importing yeast_esr_exp.  If autoreload, may need to reset base_dir and data_processing dir \n  yeast_esr_exp.base_dir=base_dir \n yeast_esr_exp.data_processing_dir = data_processing_dir')
 import os 
 import pandas as pd
 import numpy as np
@@ -674,7 +674,7 @@ def sort_regev_stress_conditions(all_conds, spec_sets, expression_data_df):
               'Pre WGH' : ''}
 
     new_col_order = []
-    for spec_set_name in ['Post WGH low', 'Post WGH high', 'Pre WGH']:
+    for spec_set_name in ['Post WGH high', 'Post WGH low', 'Pre WGH']:
         spec_set = spec_sets[spec_set_name]
         level = levels[spec_set_name]
         if level == '': 
@@ -967,7 +967,7 @@ def tsankov_ohnolog_expression_data_SSD_combine(exp_df, spec_sets, combine_metho
 
         raw_expression_data_row = []
 
-        for spec_set_name in ['Post WGH low', 'Post WGH high', 'Pre WGH']: 
+        for spec_set_name in ['Post WGH high', 'Post WGH low', 'Pre WGH']: 
             spec_set = spec_sets[spec_set_name]
             level = levels[spec_set_name]
             if level == '': 
@@ -991,7 +991,7 @@ def tsankov_ohnolog_expression_data_SSD_combine(exp_df, spec_sets, combine_metho
         raw_expression_data[high_gene_common_name + '_' + low_gene_common_name] = raw_expression_data_row
 
     columns = []
-    for spec_set_name in ['Post WGH low', 'Post WGH high', 'Pre WGH']: 
+    for spec_set_name in ['Post WGH high', 'Post WGH low', 'Pre WGH']: 
         spec_set = spec_sets[spec_set_name]
         level = levels[spec_set_name]
         if level == '': 
@@ -1316,13 +1316,13 @@ def SC_common_name_lookup_KL_generate_dict():
     #Load ortholog data to add SCer common names for the KL genes.  For orthologs adds both orthologs separated by
     # an _.  For some reason this takes a while
     orth_dir = os.path.normpath(data_processing_dir + 'ortholog_files_YGOB') + os.sep
-    orth_lookup = io_library.read_orth_lookup_table('Klac', 'Scer', orth_dir)
+    orth_lookup = read_orth_lookup_table('Klac', 'Scer', orth_dir)
 
     sc_common_name_labels = {}
 
     for kl_gene, orth_list in orth_lookup.items():
         #print(kl_gene)
-        label = '_'.join([io_library.SC_common_name_lookup([sc_orf])[0] for sc_orf in orth_list])
+        label = '_'.join([SC_common_name_lookup([sc_orf])[0] for sc_orf in orth_list])
         sc_common_name_labels[kl_gene] = label
         print(kl_gene + ':' + label)
 
@@ -2059,7 +2059,7 @@ def join_ohnologs_and_sort(data_to_add, ohnologs, sort_column):
     # After running for S.Cer, to add SC_common_name, 
     #
     # for level in ['low','high']: 
-    #     ohnologs_expression_sorted['SC_common_name_' + level] = io_library.SC_common_name_lookup(ohnologs_expression_sorted['genename_' + level])
+    #     ohnologs_expression_sorted['SC_common_name_' + level] = yeast_esr_exp.SC_common_name_lookup(ohnologs_expression_sorted['genename_' + level])
     # ohnologs_expression_sorted.drop(columns=['Gene Name 1', 'Gene Name 2'], inplace=True)
     
     # # Rename Gene Name 1 and Gene Name 2 columns
@@ -2961,7 +2961,7 @@ def run_fimo_command(promoter_fname, thresh, fname_prefix, output_dir,
     #Default is the Jaspar core 2016 database with all motifs
     #should eventually make motif command accept common name, look up number in dictionary, and accept more than one. 
     #test with this motif: MA0398.1
-    #motif_dict = io_library.build_motif_dict(fname)
+    #motif_dict = yeast_esr_exp.build_motif_dict(fname)
     #motif_dict['MA0371.1']
     
     if motif == "All":
@@ -4031,6 +4031,6 @@ def correlation_nan_filt(v1, v2):
     #assign 1 
     if np.isnan(corr_dist):
         corr_dist=1.0  
-        print("io_library.correlation_nan_filt.  Warning: encountered vector of all 0's.  Assigned correlation distance of 1.")
+        print("yeast_esr_exp.correlation_nan_filt.  Warning: encountered vector of all 0's.  Assigned correlation distance of 1.")
     
     return corr_dist
