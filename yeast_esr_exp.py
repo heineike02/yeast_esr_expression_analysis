@@ -1312,9 +1312,12 @@ def SC_common_name_lookup(gene_list):
     return SC_common_names
 
 def SC_common_name_lookup_KL_generate_dict():
-    #Only need to run once. The database is stored as a .pkl file after that
-    #Load ortholog data to add SCer common names for the KL genes.  For orthologs adds both orthologs separated by
-    # an _.  For some reason this takes a while
+    #Builds database for SC_common_name_lookup_KL.  
+    #Only need to run once. The database is stored as a csv file after that
+    
+    #Load ortholog data to add SCer common names for the KL genes.  For adds both orthologs separated by
+    # an _.  
+    # For some reason this takes a while.  SC_common_name_lookup should probably be optimized
     orth_dir = os.path.normpath(data_processing_dir + 'ortholog_files_YGOB') + os.sep
     orth_lookup = read_orth_lookup_table('Klac', 'Scer', orth_dir)
 
@@ -1324,12 +1327,14 @@ def SC_common_name_lookup_KL_generate_dict():
         #print(kl_gene)
         label = '_'.join([SC_common_name_lookup([sc_orf])[0] for sc_orf in orth_list])
         sc_common_name_labels[kl_gene] = label
-        print(kl_gene + ':' + label)
-
-    pickle.dump(sc_common_name_labels, open(os.path.normpath(data_processing_dir + 'ortholog_files_YGOB/kl_dict_sc_common_name.pkl'),'wb'))
+        #print(kl_gene + ':' + label)
+        
+    fname = os.path.normpath(data_processing_dir + 'ortholog_files_YGOB/kl_sc_common_name.csv')
+    pd.Series(sc_common_name_labels).to_csv(fname)
     
-    print("sc_common_name_labels dict saved at " + data_processing_dir + 'ortholog_files_YGOB/kl_dict_sc_common_name.pkl' )
-    
+    print("sc_common_name_labels dict saved at " + fname)
+    #pickle.dump(sc_common_name_labels, open(os.path.normpath(data_processing_dir + 'ortholog_files_YGOB/kl_dict_sc_common_name.pkl'),'wb'))
+  
     return sc_common_name_labels
 
 def SC_common_name_lookup_KL(kl_genename_list): 
@@ -1337,7 +1342,13 @@ def SC_common_name_lookup_KL(kl_genename_list):
     #If there is no ortholog in SC, returns the KL name.  
 
     #Load labels for K.Lac genes
-    sc_common_name_labels = pickle.load(open(os.path.normpath(data_processing_dir + 'ortholog_files_YGOB/kl_dict_sc_common_name.pkl'),mode='rb'))
+    
+    #previous version used pickle
+    #sc_common_name_labels = pickle.load(open(os.path.normpath(data_processing_dir + 'ortholog_files_YGOB/kl_dict_sc_common_name.pkl'),mode='rb'))
+    
+    #Load the csv and save as a dictionary
+    fname = os.path.normpath(data_processing_dir + 'ortholog_files_YGOB/kl_sc_common_name.csv')
+    sc_common_name_labels = pd.read_csv(fname, index_col = 0)['0'].to_dict()
     
     sc_common_name_label_list = []
     for kl_gene in kl_genename_list:
