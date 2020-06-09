@@ -1,4 +1,4 @@
-from core import io_library 
+#from core import io_library 
 #import io_library
 import pandas as pd
 import numpy as np
@@ -255,7 +255,7 @@ def lfc_padj_plot_with_lines(x_data,y_data,hover_text,lines):
         },
         yaxis= {
             #"range":[-2, 20],
-            "title":'-log10(pvalue)'
+            "title":'-log10(padj)'
         },
         showlegend=False
     )

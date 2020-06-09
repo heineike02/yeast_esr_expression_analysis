@@ -20,10 +20,10 @@ from Bio import SeqIO
 # ref: https://groups.google.com/forum/#!topic/etetoolkit/6NblSBPij4o
 #20181031: got this error message: twisted 18.7.0 requires PyHamcrest>=1.9.0, which is not installed.
 
-import requests
-from lxml import etree    #parses xml output
+# import requests   #Maybe I can remove these routines or do them in another file
+# from lxml import etree    #parses xml output
 from itertools import product
-import pickle
+#import pickle  #Try not to use pickle
 from itertools import chain
 
 base_dir = ''
