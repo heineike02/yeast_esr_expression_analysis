@@ -2031,7 +2031,8 @@ def read_orth_lookup_table(species1, species2, orth_dir):
             orth_lookup[linesp[0]]= linesp[1:]
 
     return orth_lookup  
-   
+
+
 def get_other_paralogs_from_dataframe(genes, dataframe): 
     #using an input list of genes that have paralogs, and a dataframe that contains its paralogs, outputs a dataframe that
     #has just the other paralogs that are not listed. 
@@ -2202,6 +2203,136 @@ def print_ortholog_file(orth_lookup_outputfname, orth_lookup):
     return
 
 ## Grouping genes
+
+def build_pka_act_rep_target_sets():
+    #Using genes that were identified as activated and repressed in S. cer and K. lac, builds sets that combine those 
+    #For functional enrichment with go terms and enrichmenet calculation for ohnologs.  
+    #Also builds background sets.  Background for SC is all genes that have DEseq data, background set for KL is all genes 
+    #that have orthologs in SC, and have data in both SC and KL.  
+    #
+    #Uses target setfiles created in these scripts:
+    #20181031_klscpka_r1g1_m24_SC_analysis and
+    #20181031_klscpka_r1g1_m24_KL_analysis
+    #
+    #Scer-Klac ortholog file saved in ortholog_files_YGOB 
+    #
+    #Deseq input from  
+    #20181017_klscpka_m24_r1g1_deseq2.rmd
+
+    target_set_files = {'SC': {'pkainh_act':'20200608_pkainh_act_SC.csv',
+                               'pkainh_rep':'20200608_pkainh_rep_SC.csv'},
+                        'KL': {'pkainh_act':'20200608_pkainh_act_KL.csv',
+                               'pkainh_rep':'20200608_pkainh_rep_KL.csv'}
+                        }
+
+    target_sets = {}
+
+    for spec,spec_sets in target_set_files.items():
+        target_sets_spec = {}
+
+        for set_name, fname in spec_sets.items():
+            target_set_df = pd.read_csv(os.path.normpath(data_processing_dir + 'kl_sc_PKA_as_m24_r1g1_20181017/' + fname ), index_col=0)
+            target_set = set(target_set_df.index)
+            target_sets_spec[set_name] = target_set
+
+        target_sets[spec] = target_sets_spec
+
+    # kl_orthologs = pd.read_pickle(data_processing_dir + "ortholog_files_YGOB/kl_orthologs.pkl")
+    kl_orthologs = read_orth_lookup_table('Klac', 'Scer', data_processing_dir + os.sep + 'ortholog_files_YGOB' + os.sep)
+
+    #Make different gene sets to look up orthologs (using SC_genenames as a key).   For SC will have all the genes, for KL will only have
+    #genes with SC orthologs. 
+
+    gene_set_names = ['kl_only_act', 'kl_only_rep','sc_only_act','sc_only_rep','klsc_act','klsc_rep','sc_act','sc_rep','kl_act','kl_rep']
+
+    #For kl_act we include the names of all SC orthologs of genes activated   
+    #If there is a kl_act gene that has two orthologs in S.cer, we include both of them.  
+
+    kl_sets = {}
+    for setname in ['pkainh_act','pkainh_rep']:
+        kl_set = []
+        for kl_gene in list(target_sets['KL'][setname]): 
+            if not(kl_gene in kl_orthologs.keys()):
+                print(kl_gene + ' from ' + setname + ' not in kl ortholog index')
+            else: 
+                sc_orth = kl_orthologs[kl_gene]
+                if sc_orth != ['NONE']:
+                    kl_set = kl_set + sc_orth
+        kl_sets[setname] = set(kl_set)
+
+    kl_act = kl_sets['pkainh_act']
+    kl_rep = kl_sets['pkainh_rep']
+
+
+    #kl_act = set(kl_orthologs.loc[kl_orthologs['kl_genename'].isin(target_sets['KL']['pkainh_act'],'sc_genename'])
+    #kl_rep = set(kl_orthologs.loc[kl_orthologs['kl_genename'].isin(target_sets['KL']['pkainh_rep']),'sc_genename'])
+
+
+    sc_act = target_sets['SC']['pkainh_act']
+    sc_rep = target_sets['SC']['pkainh_rep']
+
+    #Load DEseq data for SCer PKA AS -/+ NMPP1 
+    #pkainh_deseq_SC = pd.read_csv(os.path.normpath(data_processing_dir + '\\kl_sc_PKA_as_m24_r1g1_20181017\\20181017_deseq_SC_AS_WT_nmpp1.csv'), index_col=0)
+    pkainh_deseq_SC = pd.read_csv(os.path.normpath(data_processing_dir + '\\kl_sc_PKA_as_m24_r1g1_20181017\\20200603_deseq_SC_AS_WT_nmpp1.csv'), index_col=0)
+
+    pkainh_deseq_SC['SC_common_name'] = SC_common_name_lookup(pkainh_deseq_SC.index)
+
+    #Load DEseq data for KLac PKA AS -/+ NMPP1
+    #Load DEseq data for SCer PKA AS -/+ NMPP1 
+    #pkainh_deseq_KL = pd.read_csv(os.path.normpath(data_processing_dir + '\\kl_sc_PKA_as_m24_r1g1_20181017\\20181017_deseq_KL_AS_WT_nmpp1.csv'), index_col=0)
+    pkainh_deseq_KL = pd.read_csv(os.path.normpath(data_processing_dir + '\\kl_sc_PKA_as_m24_r1g1_20181017\\20200603_deseq_KL_AS_WT_nmpp1.csv'), index_col=0)
+    kl_genes_w_data = set(kl_genename_convert_list(list(pkainh_deseq_KL.index)))
+
+    gene_sets = { 'kl_only_act' : kl_act - sc_act, 
+                  'kl_only_rep' : kl_rep - sc_rep, 
+                  'sc_only_act' : sc_act - kl_act, 
+                  'sc_only_rep' : sc_rep - kl_rep, 
+                  'klsc_act' : kl_act & sc_act, 
+                  'klsc_rep' : kl_rep & sc_rep,
+                  'sc_act':sc_act,
+                  'sc_rep':sc_rep,
+                  'kl_act':kl_act,
+                  'kl_rep':kl_rep,
+                  'sc_no_change':set(pkainh_deseq_SC.index)-(sc_act | sc_rep),
+                  'kl_no_change':kl_genes_w_data-(kl_act | kl_rep) 
+                  }
+
+
+    #Prepare background set
+
+
+    background_map = {'kl_only_act' : 'KL_orth',
+                     'kl_only_rep' : 'KL_orth', 
+                     'sc_only_act' : 'SC',
+                     'sc_only_rep': 'SC',
+                     'sc_no_change': 'SC',
+                     'klsc_act': 'KL_orth',
+                     'klsc_rep': 'KL_orth',
+                     'sc_act':'SC',
+                     'sc_rep':'SC',
+                     'kl_act':'KL',
+                     'kl_rep':'KL', 
+                     'sc_no_change':'SC',
+                     'kl_no_change':'KL'
+                     }
+
+
+    #Only keeps KL gene if it has data in the KL DEpka set
+    all_kl_orths = []
+    #5188 genes with KL orthologs
+    #of those, only 4953 have data in KL
+    #of those, only 4802 have data for the SC ortholog as well.  
+    for kl_genename, kl_orth in kl_orthologs.items():
+        if kl_genename in kl_genes_w_data:
+            all_kl_orths = all_kl_orths + kl_orth
+    all_kl_orths_set = set(all_kl_orths)-{'NONE'}
+
+    background_genes = {'SC' : set(pkainh_deseq_SC.index), 
+                        'KL': kl_genes_w_data,
+                        'KL_orth' : all_kl_orths_set & set(pkainh_deseq_SC.index)
+                       }
+    return gene_sets, background_map, background_genes
+
 def threshold_sign(x, high_threshold, low_threshold): 
     if x > high_threshold:
         x_sign = 1

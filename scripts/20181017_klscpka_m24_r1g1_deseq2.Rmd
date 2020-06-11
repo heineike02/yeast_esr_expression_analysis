@@ -36,84 +36,84 @@ countDataList = list(KL = NULL,SC  = NULL)
 metaDataList = list(KL = NULL,SC  = NULL)
 
 
-#for (exp_species in c("KL","SC")){
-exp_species="SC"
-
-print(paste("species is ", exp_species))
-cts <- paste(base_dir,"20181017_countdata_postQC_",exp_species,".csv",sep = "")
-countData = read.csv(cts, row.names = 1, header = TRUE)
-
-#selecting out a subset: 
-# countData = countData[,c("7001","7002")]
-   
-#this metadata file comes from the python script 20181025_sequencingQC_and_counts_file.ipynb.
-meta <- paste(base_dir,"20181017_metadata_deseq_",exp_species,".csv",sep = "")
-metaData = read.csv(meta, row.names = 1)
-
-#Remove Biological Replicates (From previous year) from analysis
-metaData_filt <-metaData[!metaData$replicate=='BR',]
-countData_filt <-countData[,!metaData$replicate=='BR']
-
-#Remove rows (genes) that have greater than Ncounts counts in Nsamp samples
-Ncounts = 2
-Nsamp = 3
-
-countData_filt <- countData_filt[(rowSums(countData_filt >=2)>3),]
-
-colnames(countData_filt) = row.names(metaData_filt)
-
-#Add column to metadata to combine tf_del, 
-
-metaData_filt$tf_del.pka_AS_mut.NMPP1 <- as.factor(paste(metaData_filt$tf_del,
-      metaData_filt$pka_AS_mut,
-      metaData_filt$NMPP1,sep='.'))
-
-countDataList[[exp_species]]=countData_filt
-metaDataList[[exp_species]]=metaData_filt
-
-
-# print(metaData)
-# print(countData)
-
-
-#Turns all count data into a DESeqDataSet
-#Didn't include replicate as part of the design
-#
-dds_all = DESeqDataSetFromMatrix(countData = countData_filt, 
-                                 colData = metaData_filt, 
-                                 design = ~ tf_del.pka_AS_mut.NMPP1)
-
-
-#Find Rlog data for all conditions/samples
-rld_all <- rlog(dds_all, blind = FALSE)  #, fitType = 'local')
-rlog_all <- assay(rld_all)
-
-write.csv(as.data.frame(rlog_all),
-          file=paste(base_dir,"20200603_rlog_all_",exp_species,".csv",sep = ""))
-
-#Plot two WT.WT.cont samples v.s. each other
-plot(rlog_all[,"7001"],rlog_all[,"7033"])
-
-#Plot RG.AS.cong rep 2 (7042) vs the tech rep RG.AS.cont 2_TRR (7076) samples v.s. each other
-plot(rlog_all[,"7042"],rlog_all[,"7076"])
-
-
-#Find DEseq for WT.AS.drug vs WT.AS.cont
-dds_all <- DESeq(dds_all)
-
-FDR = 0.01
-plotDispEsts(dds_all)
-res = results(dds_all,
-              contrast=c("tf_del.pka_AS_mut.NMPP1","WT.AS.drug","WT.AS.cont"), 
-              alpha=FDR)
-
-#put results in order of padj
-res <- res[order(res$padj),] 
-write.csv(as.data.frame(res), 
-file=paste(base_dir,"20200603_deseq_",exp_species,"_AS_WT_nmpp1.csv",sep = ""))
-
-plot(res$log2FoldChange,-log10(res$padj))
-
+for (exp_species in c("KL","SC")){
+  print(exp_species)
+  
+  print(paste("species is ", exp_species))
+  cts <- paste(base_dir,"20181017_countdata_postQC_",exp_species,".csv",sep = "")
+  countData = read.csv(cts, row.names = 1, header = TRUE)
+  
+  #selecting out a subset: 
+  # countData = countData[,c("7001","7002")]
+     
+  #this metadata file comes from the python script 20181025_sequencingQC_and_counts_file.ipynb.
+  meta <- paste(base_dir,"20181017_metadata_deseq_",exp_species,".csv",sep = "")
+  metaData = read.csv(meta, row.names = 1)
+  
+  #Remove Biological Replicates (From previous year) from analysis
+  metaData_filt <-metaData[!metaData$replicate=='BR',]
+  countData_filt <-countData[,!metaData$replicate=='BR']
+  
+  #Remove rows (genes) that have greater than Ncounts counts in Nsamp samples
+  Ncounts = 2
+  Nsamp = 3
+  
+  countData_filt <- countData_filt[(rowSums(countData_filt >=2)>3),]
+  
+  colnames(countData_filt) = row.names(metaData_filt)
+  
+  #Add column to metadata to combine tf_del, 
+  
+  metaData_filt$tf_del.pka_AS_mut.NMPP1 <- as.factor(paste(metaData_filt$tf_del,
+        metaData_filt$pka_AS_mut,
+        metaData_filt$NMPP1,sep='.'))
+  
+  countDataList[[exp_species]]=countData_filt
+  metaDataList[[exp_species]]=metaData_filt
+  
+  
+  # print(metaData)
+  # print(countData)
+  
+  
+  #Turns all count data into a DESeqDataSet
+  #Didn't include replicate as part of the design
+  #
+  dds_all = DESeqDataSetFromMatrix(countData = countData_filt, 
+                                   colData = metaData_filt, 
+                                   design = ~ tf_del.pka_AS_mut.NMPP1)
+  
+  
+  #Find Rlog data for all conditions/samples
+  rld_all <- rlog(dds_all, blind = FALSE)  #, fitType = 'local')
+  rlog_all <- assay(rld_all)
+  
+  write.csv(as.data.frame(rlog_all),
+            file=paste(base_dir,"20200603_rlog_all_",exp_species,".csv",sep = ""))
+  
+  # #Plot two WT.WT.cont samples v.s. each other
+  # plot(rlog_all[,"7001"],rlog_all[,"7033"])
+  # 
+  # #Plot RG.AS.cong rep 2 (7042) vs the tech rep RG.AS.cont 2_TRR (7076) samples v.s. each other
+  # plot(rlog_all[,"7042"],rlog_all[,"7076"])
+  
+  
+  #Find DEseq for WT.AS.drug vs WT.AS.cont
+  dds_all <- DESeq(dds_all)
+  
+  FDR = 0.01
+  plotDispEsts(dds_all)
+  res = results(dds_all,
+                contrast=c("tf_del.pka_AS_mut.NMPP1","WT.AS.drug","WT.AS.cont"), 
+                alpha=FDR)
+  
+  #put results in order of padj
+  res <- res[order(res$padj),] 
+  write.csv(as.data.frame(res), 
+  file=paste(base_dir,"20200603_deseq_",exp_species,"_AS_WT_nmpp1.csv",sep = ""))
+  
+  plot(res$log2FoldChange,-log10(res$padj))
+}
 
 ```
 
