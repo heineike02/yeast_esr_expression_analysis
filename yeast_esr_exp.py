@@ -2061,7 +2061,7 @@ def join_ohnologs_and_sort(data_to_add, ohnologs, sort_column):
     #sort_column is a column in data_to_add and output paralogs are sorted into low and high sets based on that
     #Example Sort column: 'log2FoldChange
     # 
-    # For S. Cer, we have the ohnologs saved in a file, and need to rindex and rename prior to using it.  
+    # For S. Cer, we have the ohnologs saved in a file, and need to reindex and rename prior to using it.  
     # 
     # ohnologs = pd.read_csv(data_processing_dir + os.path.normpath("ortholog_files_YGOB/ohnologs.csv"), index_col=0)
     # ohnologs.set_index('Ancestor', inplace=True)
@@ -2127,68 +2127,115 @@ def join_ohnologs_and_sort(data_to_add, ohnologs, sort_column):
 
     return ohnologs_expression_sorted
 
-def join_ohnologs_and_sort_old(data_to_add, ohnologs, sort_column):
-    #For a dataset with an index of sc_genename and a column to sort on (e.g. 'log2FoldChange') provides a dataframe
-    #in which each row contains both ohnologs 
+def join_ohnologs_and_sort_filter(data_to_add, ohnologs, sort_column, filter_column, filter_value, filter_direction):
+    #Adds data_to_add, a dataframe indexed on genenames to a dataframe of ohnologs, sorting based on sort column, after filtering based on filter column
+    #
+    #from YGOB_pillars (i.e. from get_WGH_pairs_by_spec) indexed on ancestor, and with column names 
+    #genename_gene1 and genename_gene2.  
+    #sort_column is a column in data_to_add and output paralogs are sorted into low and high sets based on that
+    #Example Sort column: 'log2FoldChange
+    #
+    #filter_column is the column to use to filter for significance prior to sorting, and you filter based on filter direction and value. 
+    #This is for cases such as RFS1/PST2 where RFS1 has a lower LFC than PST2, its ohnolog, but PST2 does not meet the p-value threshold)
+    #
+    #In this routine each column is first filtered and 0 assigned if the filter is not passed.  
+    #
+    # For S. Cer, we have the ohnologs saved in a file, and need to rindex and rename prior to using it.  
+    # 
+    # ohnologs = pd.read_csv(data_processing_dir + os.path.normpath("ortholog_files_YGOB/ohnologs.csv"), index_col=0)
+    # ohnologs.set_index('Ancestor', inplace=True)
+    # ohnologs.rename(columns={"Gene 1": "genename_gene1",
+    #                          "Gene 2": "genename_gene2"}, inplace=True)
+    # 
+    # After running for S.Cer, to add SC_common_name, 
+    #
+    # for level in ['low','high']: 
+    #     ohnologs_expression_sorted['SC_common_name_' + level] = yeast_esr_exp.SC_common_name_lookup(ohnologs_expression_sorted['genename_' + level])
+    # ohnologs_expression_sorted.drop(columns=['Gene Name 1', 'Gene Name 2'], inplace=True)
 
-    ohnologs_expression_gene1 = pd.merge(ohnologs, data_to_add, how = 'inner', left_on = 'Gene 1', right_index = True)
-    ohnologs_expression = pd.merge(ohnologs_expression_gene1, data_to_add, how = 'inner', left_on = 'Gene 2', right_index = True, suffixes = ['_gene1', '_gene2'])
+    # # Rename Gene Name 1 and Gene Name 2 columns
+    # ohnologs_expression.rename(columns = {'Gene 1' : 'genename_gene1',
+    #                                       'Gene 2' : 'genename_gene2'}, inplace = True)
 
-    ## This seems important if you are not merging on the index
-    ## Drop Gene 1 and Gene 2 columns
-    #ohnologs_expression.drop(['Gene 1', 'Gene 2'], axis = 1, inplace = True)
+    ohnologs_expression_gene1 = pd.merge(ohnologs, data_to_add, how = 'inner', left_on = 'genename_gene1', right_index = True)
+    ohnologs_expression = pd.merge(ohnologs_expression_gene1, data_to_add, how = 'inner', left_on = 'genename_gene2', right_index = True, suffixes = ['_gene1', '_gene2'])
 
-    # Rename Gene Name 1 and Gene Name 2 columns
-    ohnologs_expression.rename(columns = {'Gene 1' : 'sc_genename_gene1',
-                                          'Gene 2' : 'sc_genename_gene2',
-                                          'Gene Name 1':'SC_common_name_gene1',
-                                          'Gene Name 2':'SC_common_name_gene2'}, inplace = True)
-
-    new_columns = {}
-    for level in ['low','high']:
-        new_columns['sc_genename_' + level] = []
-        new_columns['SC_common_name_' + level] = []
-        for column_name in data_to_add.columns:
-            new_columns[column_name + '_' + level] = []
-
-    for index, row in ohnologs_expression.iterrows():
-        #Decide if gene1 or gene2 is low expression
-        if row[sort_column + '_gene1']<row[sort_column + '_gene2']:
-            low_gene = 'gene1'
-            high_gene = 'gene2'
-        elif  row[sort_column + '_gene1']>row[sort_column + '_gene2']:
-            low_gene = 'gene2'
-            high_gene = 'gene1'
+    
+    for gene_label in ['gene1','gene2']:
+    
+        ohnologs_expression[sort_column + '_' + gene_label + '_filt'] = 0
+        if filter_direction=='less':
+            pass_inds = ohnologs_expression[filter_column + '_' + gene_label]< filter_value
+        elif filter_direction == 'more':
+            pass_inds = ohnologs_expression[filter_column + '_' + gene_label]> filter_value
         else:
-            print('problems with {} and {}'.format(row['SC_common_name_gene1'],row['SC_common_name_gene2']))
-        
-        level_dict = {'low':low_gene, 'high': high_gene}
-                   
-        for level, level_gene in level_dict.items():
-            new_columns['sc_genename_' + level].append(row['sc_genename_'+level_gene])
-            new_columns['SC_common_name_' + level].append(row['SC_common_name_'+level_gene])
-            for column_name in data_to_add.columns:
-                new_columns[column_name + '_' + level].append(row[column_name + '_' + level_gene])
+            raise ValueError('filter direction should be less or more')
 
-    ohnologs_expression_sorted = ohnologs_expression.copy()
+        ohnologs_expression.loc[pass_inds, sort_column + '_' + gene_label + '_filt'] = ohnologs_expression.loc[pass_inds, sort_column + '_' + gene_label]
 
+    
+    #Identify when gene1 is higher: 
+    gene1_higher = ohnologs_expression[sort_column + '_gene1_filt']>ohnologs_expression[sort_column + '_gene2_filt']
+
+    #Identify when gene2 is higher: 
+    gene2_higher = ohnologs_expression[sort_column + '_gene1_filt']<ohnologs_expression[sort_column + '_gene2_filt']
+
+    #For genes in which at least one passes the filter, assigne low and high genes
+
+    ohnologs_expression['low_gene'] = 'blank'
+    ohnologs_expression['high_gene'] = 'blank'
+    ohnologs_expression.loc[gene1_higher,'low_gene']='gene2'
+    ohnologs_expression.loc[gene1_higher,'high_gene']='gene1'
+    ohnologs_expression.loc[gene2_higher,'low_gene']='gene1'
+    ohnologs_expression.loc[gene2_higher,'high_gene']='gene2'
+
+    #When neither pass the filter, just use LFC
+    #identify when neither pass the filter: 
+    low_sig = ohnologs_expression[sort_column + '_gene1_filt']==ohnologs_expression[sort_column + '_gene2_filt']
+    gene1_higher_low_sig = low_sig & (ohnologs_expression[sort_column + '_gene1']>ohnologs_expression[sort_column + '_gene2']) 
+    gene2_higher_low_sig = low_sig & (ohnologs_expression[sort_column + '_gene1']<ohnologs_expression[sort_column + '_gene2']) 
+
+    ohnologs_expression.loc[gene1_higher_low_sig,'low_gene']='gene2'
+    ohnologs_expression.loc[gene1_higher_low_sig,'high_gene']='gene1'
+    ohnologs_expression.loc[gene2_higher_low_sig,'low_gene']='gene1'
+    ohnologs_expression.loc[gene2_higher_low_sig,'high_gene']='gene2'
+
+    #Swap names based on which is higher
+
+    #add new columns for low/high data
     for level in ['low','high']:
-        ohnologs_expression_sorted['sc_genename_' + level] = new_columns['sc_genename_' + level]
-        ohnologs_expression_sorted['SC_common_name_' + level] = new_columns['SC_common_name_' + level] 
-        for column_name in data_to_add.columns:
-            ohnologs_expression_sorted[column_name + '_' + level] = new_columns[column_name + '_' + level] 
+        for column_name in list(data_to_add.columns) + ['genename']:
+            ohnologs_expression[column_name + '_' + level]='blank'
 
-    columns_to_drop = []
+    #add data to new columns based on which gene is low and which is high
 
-    for gene in ['gene1','gene2']:
-        columns_to_drop.append('sc_genename_' + gene)
-        columns_to_drop.append('SC_common_name_' + gene)
-        for column_name in data_to_add.columns:
-            columns_to_drop.append(column_name + '_' + gene)
+    opposites = {'gene1':'gene2','gene2':'gene1'}
 
-    ohnologs_expression_sorted.drop(columns=columns_to_drop, inplace=True)
+    for low_gene in ['gene1','gene2']: 
+        high_gene = opposites[low_gene]
+        level = 'low'
+        for column_name in list(data_to_add.columns) + ['genename']: 
+            column_name_low_gene = column_name + '_' + low_gene
+            column_name_low = column_name + '_low'
+            column_name_high_gene = column_name + '_' + high_gene
+            column_name_high = column_name + '_high'
+            ohnologs_expression.loc[(ohnologs_expression['low_gene']==low_gene),column_name_low] =  ohnologs_expression.loc[(ohnologs_expression['low_gene']==low_gene),column_name_low_gene]
+            ohnologs_expression.loc[(ohnologs_expression['low_gene']==low_gene),column_name_high] =  ohnologs_expression.loc[(ohnologs_expression['low_gene']==low_gene),column_name_high_gene]
+
+    #delete all columns with gene1 and gene2
+
+    columns_to_drop = ['log2FoldChange_gene1_filt', 'log2FoldChange_gene2_filt', 'low_gene', 'high_gene']
+
+    for gene_label in ['gene1','gene2']:
+        columns_to_drop.append('genename_' + gene_label)
+        for column_name in list(data_to_add.columns) + ['genename']:
+            columns_to_drop.append(column_name + '_' + gene_label)
+
+    ohnologs_expression_sorted = ohnologs_expression.drop(columns=columns_to_drop)
+
+        
     return ohnologs_expression_sorted
-
+        
 def print_ortholog_file(orth_lookup_outputfname, orth_lookup):
     with open(orth_lookup_outputfname, 'w') as fw:
         for spec1_gene, spec2_genes in orth_lookup.items():
