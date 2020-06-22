@@ -65,7 +65,7 @@ from Bio import pairwise2
 # from Bio.Alphabet import generic_dna
 # from Bio.Seq import Seq
 from Bio import Phylo
-#import gffutils  #Not sure when I am going to use this one
+import gffutils  #Not sure when I am going to use this one
 
 # import re
 
