@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 from Bio.Seq import Seq
 from Bio.Alphabet import generic_dna
 from Bio import SeqIO
+import gffutils  
 #from ete3 import Tree
 #ete3 is not officially supported on windows, and so must be loaded via pip: 
 # pip install -U https://github.com/etetoolkit/ete/archive/qt5.zip
@@ -2658,6 +2659,7 @@ class PromHits(dict):
             self['pct']['STRE_TATA'] = len(hits)/self['total']
                    
 class PromComparison(dict):
+    #Object that gathers data on motif hits between different sets of promoters.
     def __init__(self, promsets):
         self['promsets'] = promsets
     
@@ -3793,6 +3795,45 @@ def make_foldchange_subsets(kl_sc_PKA_data, pthreshold_KL, pthreshold_SC):
                     'klscunsig': list(kl_sc_PKA_data_unsig['sc_genename'])
                     }
     return gene_set_dict
+
+def generate_dubious_orf_list(db_created, savefile): 
+    #Generates a series which is a list of dubious orfs from the S. cerevisiae genome file. 
+    #If running this for the first time, db_created will need to be False.  Otherwise it should be True
+    #the database should be at: "genomes/scer_20181114/saccharomyces_cerevisiae_R64-2-2_20170117.db"
+    #If you want to save the file again, savefile should be True
+    
+    gtf_fname = data_processing_dir + os.path.normpath("genomes/scer_20181114/saccharomyces_cerevisiae_R64-2-2_20170117.gff")
+    db_fname = data_processing_dir + os.path.normpath("genomes/scer_20181114/saccharomyces_cerevisiae_R64-2-2_20170117.db")
+ 
+    if db_created: 
+        db = gffutils.FeatureDB(db_fname)
+    else: 
+        db = gffutils.create_db(gtf_fname, db_fname)
+
+    sc_features = pd.read_sql('select * from features;', db.conn)
+
+    sc_genes = sc_features[sc_features['featuretype']=='gene']
+
+    dubious_orfs = []
+    for row in sc_genes.iterrows():
+        attributes = row[1]['attributes'].strip("{}").split(",")
+        for attribute in attributes: 
+            if attribute.split(":")[0]=='"orf_classification"':
+                if attribute.split(":")[1]=='["Dubious"]':
+                    dubious_orfs.append(row[1]['id'])
+    print("There are {} dubious orfs in the saccharomyces_cerevisiae_R64-2-2_20170117.gff".format(len(dubious_orfs)))
+    
+    dubious_orfs = pd.Series(dubious_orfs)
+    
+    if savefile: 
+        dubious_orfs.to_csv(data_processing_dir + os.path.normpath("genomes/scer_20181114/dubious_orfs.csv"))
+    
+    return dubious_orfs
+
+def wsl_filename_convert(fname):
+    #Convert a filename on a windows system to the corresponding Windows Subsystem for Linux filename
+    wsl_fname = '/' + '/'.join(['mnt','c'] + fname.split('\\')[1:])
+    return wsl_fname
 
 ## Topology determination
 def build_phylo_conversion_sc():

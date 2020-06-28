@@ -21,6 +21,7 @@ if sys.path[-1] != base_dir:
     print(sys.path)
 
 import os
+import posixpath
 
 print("Importing yeast_esr_exp and setting base_dir and data_processing_dir")
 #from core import expression_plots 
@@ -65,7 +66,7 @@ from Bio import pairwise2
 # from Bio.Alphabet import generic_dna
 # from Bio.Seq import Seq
 from Bio import Phylo
-import gffutils  #Not sure when I am going to use this one
+#import gffutils  
 
 # import re
 
