@@ -43,8 +43,9 @@ from matplotlib.collections import PatchCollection
 from matplotlib.gridspec import GridSpec
 
 #from matplotlib_venn import venn2
-#from matplotlib_venn import venn3
-# Not sure if matplotlib_venn or venn is better
+from matplotlib_venn import venn3
+#another option is venn: https://pypi.org/project/venn/  (has support for 4 sets)
+#matplotlib-venn is at https://pypi.org/project/matplotlib-venn/
 import squarify  #Makes treegraphs. 
 #for my windows10 laptop I had to install this package using pip rather than anaconda.  
 import seaborn as sns  #; sns.set(style="ticks", color_codes=True)  #not sure why I set color codes on ticks to be true
