@@ -42,7 +42,7 @@ from matplotlib.patches import Polygon, Patch, Rectangle  #Circle, Wedge,
 from matplotlib.collections import PatchCollection
 from matplotlib.gridspec import GridSpec
 
-#from matplotlib_venn import venn2
+from matplotlib_venn import venn2
 from matplotlib_venn import venn3
 #another option is venn: https://pypi.org/project/venn/  (has support for 4 sets)
 #matplotlib-venn is at https://pypi.org/project/matplotlib-venn/
@@ -50,7 +50,7 @@ import squarify  #Makes treegraphs.
 #for my windows10 laptop I had to install this package using pip rather than anaconda.  
 import seaborn as sns  #; sns.set(style="ticks", color_codes=True)  #not sure why I set color codes on ticks to be true
 #from sklearn import linear_model
-#import pickle  #want to avoid using pickle and instead use tablualar intermediate data structures
+import pickle 
 import subprocess  
 #import networkx as nx
 import scipy.stats as stats
@@ -58,8 +58,20 @@ import statsmodels.api as sm
 import scipy.spatial.distance as spd
 #import statsmodels.graphics.gofplots as stats_graph
 import scipy.cluster.hierarchy as sch
-#import FisherExact  #Didn't compile on Windows - maybe there is an alternative (fisher for example)
-
+import FisherExact  
+#Fisher's exact test for larger contingency tables (I use 3x3 contingency tables).  
+#FisherExact didn't initially compile on windows because there was not a forntran compiler. 
+#Followed instructions from https://superuser.com/questions/1399738/pip-error-no-fortran-compiler-found-but-compiler-already-present
+#
+#1.  Made distutils.cfg file in C:\Users\BMH_work\anaconda3\Lib\distutils that had the following lines: 
+#[build]           
+#compiler=mingw32
+#
+#In the environment from a conda terminal ran: 
+#conda install libpython
+#conda install -c msys2 m2w64-toolchain
+#
+#Then pip install FisherExact worked
 
 from Bio import SeqIO
 from Bio import pairwise2
@@ -97,8 +109,8 @@ import plotly.graph_objs as pygo
 # pip install -U https://github.com/etetoolkit/ete/archive/qt5.zip
 # ref: https://groups.google.com/forum/#!topic/etetoolkit/6NblSBPij4o
 
-#for scraping internet data (e.g. ncbi)
-# import requests
-# from bs4 import BeautifulSoup
+#for scraping internet data (e.g. ncbi, YGOB)
+import requests
+from bs4 import BeautifulSoup
 #from lxml import etree    #parses xml output
 

@@ -3347,8 +3347,10 @@ def exact_promoter_scan_from_fasta(promoters_fname, motif_dict, output_format = 
     return output
 
 def exact_promoter_scan_genelist(gene_list, motif_dict, promoter_database, output_format = 'counts', sequence_context = 0): 
+    #This is not using L_prom from motif dict as later scans are.  
+    
     #finds nonoverlapping exact matches forward and backward for motifs. 
-    #input:  motif_dict,  Dictionary of exact motifs to be used e.g. {'STRE': 'CCCCT'} 
+    #input:  motif_dict,  Dictionary of exact motifs to be used e.g. {'STRE': 'CCCCT'}   ##this needs to be updated to (motif, L_prom)
     #        promoter_database 
     #        gene_list from dataframe (genes must be primary key of promoter data structure)
     #        output_format: 'counts'(default) or 'full'.  If 'full' is selected each entry is a list of tuples containing the location of the 
@@ -3466,7 +3468,7 @@ def exact_promoter_scan_genelist_dict(gene_list, promoter_dict, motif_dict, outp
     
     return output
 
-def exact_promoter_scan_genelist_orths_dict(gene_list_orths, rule, promoter_dict, motif_dict, output_format = 'counts', sequence_context = 0, L_prom = None): 
+def exact_promoter_scan_genelist_orths_dict(gene_list_orths, rule, promoter_dict, motif_dict, output_format = 'counts', sequence_context = 0): 
 
     #For a dictionary of all promoters and a list of genes, find counts, location and sequence context of desired motifs.  
     #
@@ -3477,11 +3479,13 @@ def exact_promoter_scan_genelist_orths_dict(gene_list_orths, rule, promoter_dict
     #           right now the only rule is to pick the one with the max STRE.  If there are two with the 
     #           same number of STREs, it just picks the one with the lowest index.
     #    promoter_dict: dictionary linking gene name to promoter sequence (a biopython sequence object)
-    #    motif_dict: Dictionary of exact motifs to be used e.g. {'STRE': 'CCCCT'} 
+    #    motif_dict: Dictionary of exact motifs to be used (motif, L_prom) e.g. {'STRE': ('CCCCT',700)} 
+    #       L_prom: desired promoter length - will shorten the length of the promoter if the input from the fasta is longer than this. 
+    #           If the promoter is shorter than the given length then the full promoter will be used.  The default is None which uses the whole sequence.  
     #    output_format: 'counts'(default) or 'full'.  If 'full' is selected will also output a list of tuples containing the location of the 
     #               found motif, and the sequence (with sequence context) of the motif 
     #    sequence_context:  number of bases surrounding the found motif to print in full output mode (default is 0)
-    #    L_prom: desired promoter length - will shorten the length of the promoter if the input from the fasta is longer than this.  If the promoter is shorter than the given length then the full promoter will be used.  The default is None which uses the whole sequence.  
+    #    
     #
     #Output: 
     #
@@ -3494,7 +3498,7 @@ def exact_promoter_scan_genelist_orths_dict(gene_list_orths, rule, promoter_dict
     output_dict = {}
     columns = []
 
-    for motif_name, motif in motif_dict.items():
+    for motif_name, (motif, L_prom) in motif_dict.items():
         if output_format=='count': 
             columns.append(motif_name + '_count')
         elif output_format=='full': 
@@ -3522,7 +3526,7 @@ def exact_promoter_scan_genelist_orths_dict(gene_list_orths, rule, promoter_dict
                         else: 
                             seq_cropped = seq
                     output_row = []
-                    for motif_name, motif in motif_dict.items():
+                    for motif_name, (motif,L_prom) in motif_dict.items():
                         if output_format=='count': 
                             prom_hits = exact_promoter_scan(motif, seq_cropped, output_format=output_format, sequence_context = sequence_context)
                             output_row.append(prom_hits)   #append counts
@@ -4264,3 +4268,22 @@ def correlation_nan_filt(v1, v2):
         print("yeast_esr_exp.correlation_nan_filt.  Warning: encountered vector of all 0's.  Assigned correlation distance of 1.")
     
     return corr_dist
+    
+def euclidean_nan_filt(v1,v2):
+    #This might be a bad idea since changing the dimension of a euclidean distance might put it on a different scale.  
+    v1_nan = np.isnan(v1)
+    v2_nan = np.isnan(v2)
+
+    v1_v2_nan = v1_nan+v2_nan
+
+    v1_filt = [item for jj, item in enumerate(v1) if ~v1_v2_nan[jj]]
+    v2_filt = [item for jj, item in enumerate(v2) if ~v1_v2_nan[jj]]
+
+    euc_dist = spd.euclidean(v1_filt, v2_filt)
+    
+    #assign 1 
+    if np.isnan(euc_dist):
+        corr_dist=1.0  
+        print("yeast_esr_exp.correlation_nan_filt.  Warning: encountered vector of all 0's.  Assigned correlation distance of 1.")
+    
+    return euc_dist
