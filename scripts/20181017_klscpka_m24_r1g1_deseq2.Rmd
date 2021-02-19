@@ -98,21 +98,36 @@ for (exp_species in c("KL","SC")){
   # plot(rlog_all[,"7042"],rlog_all[,"7076"])
   
   
-  #Find DEseq for WT.AS.drug vs WT.AS.cont
-  dds_all <- DESeq(dds_all)
   
+  dds_all <- DESeq(dds_all)
   FDR = 0.01
   plotDispEsts(dds_all)
+  
+  #Find DEseq for WT.AS.drug vs WT.AS.cont
   res = results(dds_all,
                 contrast=c("tf_del.pka_AS_mut.NMPP1","WT.AS.drug","WT.AS.cont"), 
                 alpha=FDR)
   
   #put results in order of padj
   res <- res[order(res$padj),] 
-  write.csv(as.data.frame(res), 
-  file=paste(base_dir,"20200603_deseq_",exp_species,"_AS_WT_nmpp1.csv",sep = ""))
+  #write.csv(as.data.frame(res), 
+  #file=paste(base_dir,"20200603_deseq_",exp_species,"_AS_WT_nmpp1.csv",sep = ""))
   
   plot(res$log2FoldChange,-log10(res$padj))
+  
+  
+  #Find DEseq for M24.AS.drug vs M24.AS.cont
+  res = results(dds_all,
+                contrast=c("tf_del.pka_AS_mut.NMPP1","M24.AS.drug","M24.AS.cont"), 
+                alpha=FDR)
+  
+  #put results in order of padj
+  res <- res[order(res$padj),] 
+  write.csv(as.data.frame(res), 
+  file=paste(base_dir,"20201003_deseq_",exp_species,"_AS_M24_nmpp1.csv",sep = ""))
+  
+  plot(res$log2FoldChange,-log10(res$padj))
+  
 }
 
 ```
