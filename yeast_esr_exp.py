@@ -80,6 +80,20 @@ def get_sgd_description(sc_genename_list):
 
 ### Other external data
 
+def sg_genename_uniprot_lookup(): 
+    #returns a dictionary to lookup uniprot id from genename
+    uniprot_id_fname = data_processing_dir + os.path.normpath('genomes/scer_20181114/scer_genename_uniprot.txt')
+
+    genename_uniprot_lookup = {}
+    with open(uniprot_id_fname, 'r') as f: 
+        f_datalines = f.readlines()[58:-5]
+        for line in f_datalines: 
+            genename = line[75:95].strip()
+            uniprot = line[95:106].strip()
+            genename_uniprot_lookup[genename] = uniprot
+    
+    return(genename_uniprot_lookup)
+            
 def make_platform_dict(spec):
     #For a given species, uses a gene expression dataset from the Tsankov et al Raw Expression data to build a map from 
     #gene ID to gene name.  Stores the output as a .csv
@@ -2522,7 +2536,7 @@ def go_terms_for_genelist(gene_set_list, go_slims_aspect, go_term_list):
                                                                             
     return go_term_df
 
-def go_term_enrichment(gene_set_list, background_genes, go_term_list, go_slims_aspect): 
+def go_term_enrichment(gene_set_list, background_genes, go_term_list, go_slims_aspect, alt_hyp = 'greater'): 
     #input is gene_set_list, background_genes list, go_term_list, and go_slims_aspect dataframe with data for each go term.  
     #output is a dataframe with enrichment columns and full list of enriched genes. 
        
@@ -2557,7 +2571,7 @@ def go_term_enrichment(gene_set_list, background_genes, go_term_list, go_slims_a
         N_bg_genes_in_goterm = len(set(background_genes_filtered) & set(term_genes))
         if N_bg_genes_in_goterm >0:
             N_bg_genes_notin_goterm = len(background_genes_filtered)-N_bg_genes_in_goterm
-            oddsratio, pvalue = stats.fisher_exact([[N_subset_genes_in_goterm, N_bg_genes_in_goterm], [N_subset_genes_notin_goterm, N_bg_genes_notin_goterm]],alternative = 'greater')
+            oddsratio, pvalue = stats.fisher_exact([[N_subset_genes_in_goterm, N_bg_genes_in_goterm], [N_subset_genes_notin_goterm, N_bg_genes_notin_goterm]],alternative = alt_hyp)
             subset_genes_in_goterm_commonname = SC_common_name_lookup(subset_genes_in_goterm)
             go_term_data.append((N_subset_genes_in_goterm,
                                  len(gene_set_list),
@@ -2896,13 +2910,13 @@ def ygob_promoter_extract(spec, L_prom):
     return 
 
 
-def ygob_AA_extract(spec):
+def ygob_AA_extract(spec, ygob_genome_dir):
     #Makes fasta file of AA sequences for YGOB species
     print(spec)
     
-    ygob_genome_dir = "/home/heineike/genomes/YGOB/"
+    #ygob_genome_dir = data_processing_dir + os.sep + os.path.normpath("genomes/YGOB")
 
-    ygob_fname_spec = ygob_genome_dir + spec + '_genome.tab'
+    ygob_fname_spec = ygob_genome_dir + os.sep + spec + '_genome.tab'
 
     features = pd.read_table(ygob_fname_spec, index_col=0, header=None)
 
