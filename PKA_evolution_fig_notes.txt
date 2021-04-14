@@ -1,0 +1,243 @@
+﻿Repositories used: 
+
+yeast_esr_expression_analysis
+y1000plus_tools
+image_analysis
+PlateReaderTools
+
+To generate RNA-seq data:
+UTR_annotation
+rna_seq_processing
+
+
+YEEA: yeast_esr_expression_analysis/scripts/
+YEEA_data: yeast_esr_expression_analysis/expression_data/
+Y1000: y1000plus_tools/scripts/
+
+Fig 1: PKA_inhibition
+a) sketch of wgh - WGH_small.svg 
+b) Nuclear localization K.lac (See image_analysis/Figure_Msn2_Nuc_loc.m), Msn2_nuc_loc_Klac (.svg and .fig)
+Ncells calculated in image_analysis/N_cells.m
+   Nuclear localization S.cer (see image_analysis/Figure_Msn2_Nuc_loc.m), Msn2_nuc_loc_Scer (.svg and .fig)
+   schematic (msn2_nuc_loc_schematic.svg)
+c) KL SC scatter paralogs YEEA/20181116_klscpka_r1g1_m24_cross_species_comparison.ipynb, SC_KL_LFC_paralogs_margdists_inset.svg
+
+Fig 2: SC_KL_DEpka
+a) Left Paralog vs Paralog scatter YEEA/20181031_klscpka_r1g1_m24_SC_analysis.ipynb, LFC_low_v_high_paralog_act_mpl_gene_highlights.svg
+b) ohnolog pair joint distribution: Numbers of ohnolog pairs with different LFC values broken down by high/low expressing ohnolog.  Analysis and calculations in YEEA/20181031_klscpka_r1g1_m24_SC_analysis.ipynb.  Image in ohnolog_joint_dist.svg
+c) rlog_dePKA_boxplot, YEEA/20181116_klscpka_r1g1_m24_cross_species_comparison.ipynb, SC_KL_DEpka_rlog_boxplot.svg (Need to add SC and KL labels in main fig) 
+d) LFC_dePKA_boxplot, YEEA/20181116_klscpka_r1g1_m24_cross_species_comparison.ipynb, SC_KL_DEpka_LFC_boxplot.svg
+e) LFC_goi heatmap, YEEA/20181116_klscpka_r1g1_m24_cross_species_comparison.ipynb, SC_KL_LFC_heatmap.svg
+
+Fig 3: DEpka_conservation
+a) time_tree_exp_species, Y1000/20190219_STRE_examples.ipynb, time_tree_exp_species.svg
+b) conservation of LFC regev data, YEEA/20181210_goi_raw_exp_stress_resp_phylogeny.ipynb, induction_conservation_summary.svg
+c) conservation of basal expression regev data, YEEA/20181210_goi_raw_exp_stress_resp_phylogeny.ipynb, raw_exp_conservation_summary.svg
+
+Fig 4: STRE_PKA
+a) STRE images.  Meme motifs: S. cerevisiae- YEEA/20180304_promoter_analysis_summaries.ipynb, motifs stored in sc_promoters  STRE motifs: YEEA/20180304_promoter_analysis_summaries.ipynb  Motifs stored in YEEA_data/motifs.  
+STRE images.  Meme motifs:  K. lactis  YEEA/20180304_promoter_analysis_summaries.ipynb, motifs stored in sc_promoters STRE motifs: YEEA/20180304_promoter_analysis_summaries.ipynb  Motifs stored in YEEA_data/motifs.  
+b) Histograms for STREs: YEEA/20190128_STRE_enrichment_v_all_phylogeny.ipynb.  SC: STRE_dist_SC_KL.svg
+c) STRE_pct_stress_conservation YEEA/20190605_stress_expression_and_STRE.ipynb.  STRE_pct_stress_conservation.svg -> with significance: STRE_pct_stress_conservation_sig
+
+Fig 5: STRE_conservation
+a) Phylogeny of STRE>1 percentages: YEEA/20190128_STRE_enrichment_v_all_phylogeny.ipynb  STRE_conservation_summary.svg -> STRE_conservation_summary_phylogeny.svg (includes phylogenetic tree). 
+b) Heatmap of N STREs for example genes: YEEA/20190128_STRE_enrichment_v_all_phylogeny.ipynb STRE_conservation_examples.svg.  Phylogeny bars and key in STRE_conservation_examples_phylogeny.svg
+c) Schematic of regulation arising before/after WGH. STRE_appearance_schematic.svg
+ 
+Fig 6: STRE_examples
+a) GPM2/3 ortholog with species collapsed.  Y1000/20190219_STRE_examples.ipynb, GPM2_GPM3_summarized.svg
+b) GPM2/3 ortholog just focusing on S.cer clade and point where STRE arises. GPM2_GPM3_detail.pdf (had to save in pdf since SVG looked wrong - species name always had small font
+c) EGO2/4 ortholog with species collapsed.  Y1000/20190219_STRE_examples.ipynb, EGO2_EGO4_summarized.svg
+
+Fig 6, is initially saved as .pdf file because saving as svg stretches it out horizontally too long. 
+
+
+
+Supplementary tables: 
+	S1 go_enrichment
+	Caclulated at YEEA/20181128_klscpka_go_analysis.ipynb
+	Supplement Table: Table with go term comparisons: YEEA/20181128_klscpka_go_analysis.ipynb. Data saved at YEEA_data/go_terms/go_enrichment_20200609.xls.  
+	
+	S2 ohnolog enrichment
+	Calculated at YEEA/20181116_klscpka_r1g1_m24_cross_species_comparison.ipynb 
+	YEEA_data/kl_sc_PKA_as_m24_r1g1_20181017/ohnolog_enrichment_20200611.csv
+
+	Tables S1 and S2 fomatted at supplement/S1_S2_go_enrichment.xls
+
+	S3 DEpka_descriptions_GOterms
+	YEEA/20181128_klscpka_go_analysis.ipynb
+	based YEEA_data/kl_sc_PKA_as_m24_r1g1_20181017\ohnologsDEpka_descriptions_GOterms.xls	
+
+	S4 DEpka_go_enrichment
+	YEEA/20181128_klscpka_go_analysis.ipynb
+	Merged three files for each of the GO aspects
+	YEEA_data/go_terms/go_enrichment_depka_20210221.xls, _function.xls, and _location.xls. 
+
+	S5 DE_PKA. 
+	Calculated in YEEA/20181116_klscpka_r1g1_m24_cross_species_comparison.ipynb , loading data from YEEA_data/20181031_klscpka_r1g1_m24_SC_analysis and 20181031_klscpka_r1g1_m24_KL_analysis.
+	Raw file saved at YEEA_data/kl_sc_PKA_as_m24_r1g1_20181017/ohnolog_sorted_table_20201101.csv
+	Clean file saved in manuscript as S3_DE_PKA_table.xls
+
+	S6 strains
+	strains_plasmids.xls
+	
+	S7 plasmids
+	strains_plasmids.xls
+	
+	S8 example_syntenic_orthologs.xls
+	Calculated in Y1000/20190819_extract_example_synteny.ipynb
+	
+	Raw synteny from YGOB at:
+	YEEA_data/example_synteny/[goi_pair]_YGOB.csv
+	After adding y1000 species synteny: 
+	YEEA_data/example_synteny/[goi_pair].csv	
+
+
+Supplementary figures: 
+S1 PKA_inh_growth_loc.svg
+a) S.cer: PlateReaderTools\scripts\Ben\PKA_inh_growth.ipynb, PKA_inh_growth_SC.svg
+ K. lac: PlateReaderTools\scripts\Ben\PKA_inh_growth.ipynb, PKA_inh_growth_KL.svg
+Growth in KL and S.Cer under PKA inhibition
+S.Cerevisiae experiment was from : 20180821_SC_strains.xlsx
+K.Lactis Experiment was from: 20180728_KL_M24_RG_del_growth.xlsx
+b) Nuclear Localization for times prior to stimulation, 10 min after stimulation. 
+Files: 
+KL: data in 20151113_55_75_78_prepost_nmpp1
+Level 404, Window 809.  
+75x75 pixel box
+
+WT -  E1   (ml:3 7.2-8.2) (ml7 19.3-8.3)
+WT +  A1 Site 0 (ml:3    6.2-8.2)  (mL7: 18.2-8.2
+AS -  H1 Site 0 (ml:3    8.08-8.2) (ml:7 20.1-8.2)
+AS +  D1 Site 0 (ml:3 img_000000002_RFP_001 7.0-8.2) (ml:7 img_000000006_RFP_001 19.0-8.2)
+ 
+SC: data in 20160929_SC_NMPP1_Dose_Resp
+WT -  B1 ml:2 4.9-7.5   ml:5  16.8-7.5
+WT +  D2 ml:2 5.6-7.5   ml:5  17.5-7.5
+AS -  A1      4.2-7.5         16.2-7.5
+AS +  C2  ml:2 5.4-7.5  ML:5  17.3-7.5
+Level 700, window 1400
+
+Andor 512 pixed 897 iAxone (DU-897E) 16x16 um
+40x, 1.5x zoom 60x
+So each pixel is 16/60=0.266667 um
+
+
+
+S2 SC_KL_PKA_targets 
+SC_KL_PKA_targets.svg
+a)YEEA/20181031_klscpka_r1g1_m24_SC_analysis.ipynb, SC_PKA_targets.svg.  
+b)YEEA/20181031_klscpka_r1g1_m24_KL_analysis.ipynb, KL_PKA_targets.svg.  
+Volcano plots showing all activated and inhibited pka targets and lines for cutoffs
+
+S3 SC_KL_LFC_goterms_array 
+YEEA/20181116_klscpka_r1g1_m24_cross_species_comparison.ipynb SC_KL_LFC_goterms_array.svg
+Large file
+
+S4 SC_ohnolog_v_ohnolog_goterms_array
+YEEA/20181031_klscpka_r1g1_m24_SC_analysis.ipynb.  Image in ohnolog_joint_dist.svg
+
+S5 
+YEEA/20181128_klscpka_go_analysis.ipynb
+go_term_chart.svg
+go_term_chart_edited.svg (could do as final figure) 
+
+S6_depka_metabolism_map
+YEEA/20181128_klscpka_go_analysis.ipynb for lists of terms.  
+Lists of terms and translations to uniprot lists are at
+YEEA_data/go_terms/go_geneset_lists
+e.g. all_ohnologs_with_data_ipath.  
+These were then validated in ipath to shrink the list to include only genes present in the dataset and saved as
+e.g. all_ohnologs_with_data_iPath_ID_validation_valid (note that only metabolism and not secondary metabolism should be used - this filters out GPD1/2 which are glycerol related)
+These files were then fed into iPath3 to generate an svg of the metabolic map, using the species specific map (sce).  The ID overlap can generate the basic color scheme, and is saved at: 
+ipath_depka_v_ohnologs_selection.txt
+This can then be plugged into the direct submission tool with the parameters listed at the top of that file to generate the .svg figure.  
+ipath_depka_low_v_ohnologs.svg.
+This is then edited to make the final figure: 
+ipath_depka_low_v_ohnologs_edited.svg (in the future can just go straight to the final figure)
+
+S7 SC_KL_rlog_heatmap, 
+YEEA/20181116_klscpka_r1g1_m24_cross_species_comparison.ipynb, SC_KL_rlog_heatmap.svg 
+
+S8 stress_pka_inh_corr 
+YEEA/20190114_PKA_inhibition_V_other_conditions.ipynb, stress_pka_inh_corr.svg
+show all conditions from Regev data and their correlation with PKA inhibition in S.Cer and K.Lac.
+
+S9 LFC_conservation_heatmap
+YEEA/20181210_goi_raw_exp_stress_resp_phylogeny.ipynb, LFC_conservation_heatmap.svg 
+
+S10 rlog_vs_tsankov (Redone, but need to integrate)
+YEEA/20181210_goi_raw_exp_stress_resp_phylogeny.ipynb, rlog_vs.tsankov.svg
+A.  S. cerevisiae and K. lactis, all genes
+rlog_vs_tsankov_all.svg
+B  Goi 
+rlog_vs_tsankov_all_goi.svg
+
+S11 expression_conservation_heatmap  
+YEEA/20181210_goi_raw_exp_stress_resp_phylogeny.ipynb, expression_conservation.svg (used to be raw_exp_conservation_all.svg)
+
+S12 DEpka_DEstress_overlap
+YEEA/20181210_goi_raw_exp_stress_resp_phylogeny.ipynb, DEstress_overlap.svg
+
+A)  DEpka_DEstress_overlap.svg
+B)  DEpka_DEstress_ohnolog.svg
+C)  DEstress_param_choice.svg  
+
+S13 DEstress_LFC_conservation
+YEEA/20181210_goi_raw_exp_stress_resp_phylogeny.ipynb, DEstress_LFC_conservation.svg (used to be conservation_induction.svg)
+A) conservation_induction_Scer.svg
+B) conservation_induction_Ncas.svg
+C) conservation_induction_Vpol.svg
+
+S14 DEstress_expression_conservation
+YEEA/20181210_goi_raw_exp_stress_resp_phylogeny.ipynb, DEstress_expression_conservation.svg (used to be conservation_raw_exp.svg)
+A) conservation_raw_exp_Scer.svg
+B) conservation_raw_exp_Ncas.svg
+
+
+S15 DEstress_species_overlap
+YEEA/20181210_goi_raw_exp_stress_resp_phylogeny.ipynb
+A) DEpka_DEstress_overlap  
+DEpka_DEstress_overlap.svg
+B) DEstress_species_overlap
+DEstress_species_overlap.svg
+C) species_overlap_regev:  Overlap of ohnologs that have data in Regev dataset. 
+species_overlap.svg
+
+S16 STRE_loc
+YEEA/20190128_STRE_enrichment_v_all_phylogeny.ipynb, STRE_loc.svg
+A) STRE_loc_Scer.svg
+B) STRE_loc_Klac.svg
+
+S17 TATA_dist_loc
+YEEA/20190128_STRE_enrichment_v_all_phylogeny.ipynb, TATA_dist_loc.svg
+A, B)TATA_dist_SC_KL
+C)TATA_loc_Scer
+D)TATA_loc_Klac
+
+S18 TATA_STRE
+YEEA/20190128_STRE_enrichment_v_all_phylogeny.ipynb, TATA_STRE.svg
+A) TATA_STRE_Scer.svg
+B) TATA_STRE_Klac.svg
+
+S19 STRE_conservation_all
+STRE_conservation_all Phylogeny of N STREs for DEpka genes: YEEA/20190128_STRE_enrichment_v_all_phylogeny.ipynb STRE_conservation_all_phylogeny.svg (from STRE_conservation_all.svg)
+Note: To get to the right size without Adobe Pro, I had to save as .eps, and then use https://convertio.co/eps-pdf/ to convert it to a pdf
+
+S20 GPM2_GPM3_all_promoters
+a) y1000_plus_tools\20190219_STRE_examples.ipynb.  GPM2_GPM3.svg
+b) GPM2/GPM3 expression. EBD\20181116_klscpka_r1g1_m24_cross_species_comparison.ipynb, mydata_GPM3.svg 
+
+S21 example_stre_expression y1000_plus_tools\20190219_STRE_examples.ipynb.
+a) GPM2_GPM3_exp.svg
+b) EGO2_EGO3_exp.svg
+
+S22 EGO2_EGO4_all_promoters
+a)y1000_plus_tools\20190219_STRE_examples.ipynb.  EGO2_EGO4.svg
+b) EGO2/4. YEEA/20181116_klscpka_r1g1_m24_cross_species_comparison.ipynb, mydata_EGO2.svg, mydata_GND1.svg
+
+S23 Msn2_del_comparison
+A) SC: YEEA/20181031_klscpka_r1g1_m24_SC_analysis.ipynb   
+B) KL: YEEA/20181031_klscpka_r1g1_m24_KL_analysis.ipynb
+
