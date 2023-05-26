@@ -12,7 +12,7 @@ from collections import Counter
 import subprocess
 import matplotlib.pyplot as plt
 from Bio.Seq import Seq
-from Bio.Alphabet import generic_dna
+#from Bio.Alphabet import generic_dna
 from Bio import SeqIO
 import gffutils  
 #from ete3 import Tree
@@ -50,7 +50,9 @@ def read_SGD_features():
     #Read in orf/name file and make it a dictionary
     # Gabe 7/12/16
     # SC_features_fname = os.path.normpath(data_processing_dir + "\ortholog_files\\SGD_features.tab")
-    SC_features_fname = os.path.normpath(data_processing_dir + "/ortholog_files_regev/SGD_features.tab")
+    
+    #SC_features_fname = os.path.normpath(data_processing_dir + "/ortholog_files_regev/SGD_features.tab")
+    SC_features_fname = os.path.normpath('C:/Users/heineib/Google Drive/Crick_LMS/external_data/genomes/scer_ref/SGD_features.tab')
 
     SC_features = pd.read_csv(SC_features_fname, sep = '\t', header=None)
     SC_orfs = SC_features.groupby(1).get_group('ORF')
